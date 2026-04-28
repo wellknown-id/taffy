@@ -36,6 +36,11 @@ struct FlexItem {
     /// The cross-alignment of this item
     align_self: AlignSelf,
 
+    /// Whether the item's cross size style is auto
+    cross_size_is_auto: bool,
+    /// The box-sizing mode of this item
+    box_sizing: BoxSizing,
+
     /// The overflow style of the item
     overflow: Point<Overflow>,
     /// The width of the scrollbars (if it has any)
@@ -548,13 +553,11 @@ fn generate_anonymous_flex_items(
                     .margin()
                     .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
                 margin_is_auto: child_style.margin().map(LengthPercentageAuto::is_auto),
-                padding: child_style
-                    .padding()
-                    .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
-                border: child_style
-                    .border()
-                    .resolve_or_zero(constants.node_inner_size.width, |val, basis| tree.calc(val, basis)),
+                padding,
+                border,
                 align_self: child_style.align_self().unwrap_or(constants.align_items),
+                cross_size_is_auto: child_style.size().cross(constants.dir).is_auto(),
+                box_sizing: child_style.box_sizing(),
                 overflow: child_style.overflow(),
                 scrollbar_width: child_style.scrollbar_width(),
                 flex_grow: child_style.flex_grow(),
@@ -696,13 +699,12 @@ fn determine_flex_base_size(
             ckd
         };
 
+        let pb = child.padding + child.border;
+        let pb_main_sum = pb.main_axis_sum(constants.dir);
+
         let container_width = constants.node_inner_size.main(dir);
-        let box_sizing_adjustment = if child_style.box_sizing() == BoxSizing::ContentBox {
-            (child.padding + child.border).sum_axes()
-        } else {
-            Size::ZERO
-        }
-        .main(dir);
+        let box_sizing_adjustment =
+            if child.box_sizing == BoxSizing::ContentBox { pb.sum_axes() } else { Size::ZERO }.main(dir);
         let flex_basis = child_style
             .flex_basis()
             .maybe_resolve(container_width, |val, basis| tree.calc(val, basis))
@@ -780,16 +782,11 @@ fn determine_flex_base_size(
         // TODO: resolve spec violation
         // Spec: https://www.w3.org/TR/css-flexbox-1/#intrinsic-item-contributions
         // Spec: https://www.w3.org/TR/css-flexbox-1/#change-2016-max-contribution
-        let padding_border_sum = child.padding.main_axis_sum(constants.dir) + child.border.main_axis_sum(constants.dir);
-        child.flex_basis = child.flex_basis.max(padding_border_sum);
+        child.flex_basis = child.flex_basis.max(pb_main_sum);
 
-        // The hypothetical main size is the item’s flex base size clamped according to its
-        // used min and max main sizes (and flooring the content box size at zero).
+        child.inner_flex_basis = child.flex_basis - pb_main_sum;
 
-        child.inner_flex_basis =
-            child.flex_basis - child.padding.main_axis_sum(constants.dir) - child.border.main_axis_sum(constants.dir);
-
-        let padding_border_axes_sums = (child.padding + child.border).sum_axes().map(Some);
+        let padding_border_axes_sums = pb.sum_axes().map(Some);
 
         // Note that it is important that the `parent_size` parameter in the main axis is not set for this
         // function call as it used for resolving percentages, and percentage size in an axis should not contribute
@@ -1382,16 +1379,14 @@ fn determine_hypothetical_cross_size(
 
         let child_known_main = constants.container_size.main(constants.dir).into();
 
-        let child_cross = child
-            .size
-            .cross(constants.dir)
-            .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
-            .maybe_max(padding_border_sum);
+        let min_cross = child.min_size.cross(constants.dir);
+        let max_cross = child.max_size.cross(constants.dir);
 
-        let child_available_cross = available_space
-            .cross(constants.dir)
-            .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
-            .maybe_max(padding_border_sum);
+        let child_cross =
+            child.size.cross(constants.dir).maybe_clamp(min_cross, max_cross).maybe_max(padding_border_sum);
+
+        let child_available_cross =
+            available_space.cross(constants.dir).maybe_clamp(min_cross, max_cross).maybe_max(padding_border_sum);
 
         let child_inner_cross = child_cross.unwrap_or_else(|| {
             tree.measure_child_size(
@@ -1606,31 +1601,23 @@ fn determine_used_cross_size(
         let line_cross_size = line.cross_size;
 
         for child in line.items.iter_mut() {
-            let child_style = tree.get_flexbox_child_style(child.node);
             child.target_size.set_cross(
                 constants.dir,
                 if child.align_self == AlignSelf::Stretch
                     && !child.margin_is_auto.cross_start(constants.dir)
                     && !child.margin_is_auto.cross_end(constants.dir)
-                    && child_style.size().cross(constants.dir).is_auto()
+                    && child.cross_size_is_auto
                 {
-                    // For some reason this particular usage of max_width is an exception to the rule that max_width's transfer
-                    // using the aspect_ratio (if set). Both Chrome and Firefox agree on this. And reading the spec, it seems like
-                    // a reasonable interpretation. Although it seems to me that the spec *should* apply aspect_ratio here.
-                    let padding = child_style
-                        .padding()
-                        .resolve_or_zero(constants.node_inner_size, |val, basis| tree.calc(val, basis));
-                    let border = child_style
-                        .border()
-                        .resolve_or_zero(constants.node_inner_size, |val, basis| tree.calc(val, basis));
-                    let pb_sum = (padding + border).sum_axes();
+                    let pb_sum = (child.padding + child.border).sum_axes();
                     let box_sizing_adjustment =
-                        if child_style.box_sizing() == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
+                        if child.box_sizing == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
 
+                    let child_style = tree.get_flexbox_child_style(child.node);
                     let max_size_ignoring_aspect_ratio = child_style
                         .max_size()
                         .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
                         .maybe_add(box_sizing_adjustment);
+                    drop(child_style);
 
                     (line_cross_size - child.margin.cross_axis_sum(constants.dir)).maybe_clamp(
                         child.min_size.cross(constants.dir),
