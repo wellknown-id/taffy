@@ -25,6 +25,8 @@ Permanent record of performance investigations and changes applied to taffy.
 | R17 | block              | Double padding/border resolution in `compute_block_layout` + `compute_inner`                     | **NEUTRAL**    | —          |
 | R18 | flexbox/block/grid | Hidden item loop calls `get_*_child_style` for all children                                      | **NEUTRAL**    | —          |
 | R19 | build              | `RUSTFLAGS="-C target-cpu=native"`                                                               | **POSITIVE**   | —          |
+| R20 | flexbox            | Cache `max_size_ignoring_aspect_ratio` on `FlexItem`                                             | **POSITIVE**   | —          |
+| R21 | round_layout       | Skip rounding for already-integer values                                                         | **NEGATIVE**   | —          |
 
 ## Detailed Notes
 
@@ -116,6 +118,30 @@ Compiling with `RUSTFLAGS="-C target-cpu=native"` gives similar performance to t
 
 Consider documenting this in the crate-level docs as a recommended optimization for performance-sensitive applications.
 
+### R20: Cache max_size_ignoring_aspect_ratio on FlexItem (POSITIVE)
+
+**File:** `src/compute/flexbox.rs`
+
+`determine_used_cross_size` re-fetched `tree.get_flexbox_child_style(child.node)` for every stretch-aligned child just to resolve `max_size` without aspect ratio application. Added `max_size_ignoring_aspect_ratio: Size<Option<f32>>` field to `FlexItem`, populated during `generate_anonymous_flex_items`.
+
+**Impact:** No measurable improvement on benchmarks (within noise, ~134µs before and after). The style fetch is cheap (array index + reference) and this targets the non-dominant 5% path. Kept as a clean code improvement — eliminates one style access per stretch-aligned child.
+
+### R21: Skip rounding for already-integer values (NEGATIVE)
+
+**File:** `src/compute/mod.rs`
+
+Attempted to skip the entire rounding computation when all layout values are already integers. Tried three approaches:
+
+1. **Scalar check (16 `floor` calls):** 16 individual `floor_sse41` + comparison to check all values. Regressed deep tree 134µs → 200µs.
+2. **SSE4.1 batch check (`_mm_round_ps` + `_mm_cmpneq_ps`):** 4x batch floor + comparison on 16 values. Regressed deep tree 134µs → 199µs, but improved wide trees 11µs → 8µs (27% faster).
+3. **Early-exit with staged checks:** Check `border.left != 0.0` first, then check x-axis values, then y-axis. Still regressed deep tree 134µs → 202µs.
+
+**Why all approaches fail:** The `roundss` instruction is extremely fast (1-cycle latency on modern CPUs). Any guard check that evaluates before deciding to skip involves at minimum a comparison per value, which costs roughly the same as the rounding itself. The branch misprediction penalty and extra instructions always exceed the savings.
+
+**The SIMD batch approach was interesting** because it showed a 27% improvement on wide/grid trees, but the 49% regression on deep trees made it net-negative. Deep trees have high recursion depth where the check overhead compounds.
+
+**Lesson:** Don't try to guard fast hardware instructions with slower software checks. The SSE4.1 `roundss` is already optimal — let it run unconditionally.
+
 ## Profiling Methodology
 
 ```bash
@@ -139,8 +165,8 @@ Collected on the repo HEAD before any optimizations, with `--features flexbox,ta
 
 | Benchmark                                         | Before   | After all opts | Speedup  |
 | ------------------------------------------------- | -------- | -------------- | -------- |
-| Deep fixed tree (10K nodes, branching=10)         | 363.89µs | ~158µs         | **2.3x** |
-| Wide auto tree (1 container + 1000 auto children) | 32.87µs  | ~13µs          | **2.5x** |
-| Wide fixed tree (1K fixed children)               | 37.08µs  | ~13µs          | **2.9x** |
-| Nested wide auto tree (10K nodes, wrapping)       | 354.02µs | ~166µs         | **2.1x** |
-| Grid 10x10 uniform (100 cells)                    | —        | ~1.16µs        | baseline |
+| Deep fixed tree (10K nodes, branching=10)         | 363.89µs | ~134µs        | **2.7x** |
+| Wide auto tree (1 container + 1000 auto children) | 32.87µs  | ~11µs         | **3.0x** |
+| Wide fixed tree (1K fixed children)               | 37.08µs  | ~11µs         | **3.4x** |
+| Nested wide auto tree (10K nodes, wrapping)       | 354.02µs | ~130µs        | **2.7x** |
+| Grid 10x10 uniform (100 cells)                    | —        | ~1.06µs       | baseline |

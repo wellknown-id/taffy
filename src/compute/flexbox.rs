@@ -33,6 +33,7 @@ struct FlexItem {
     min_size: Size<Option<f32>>,
     /// The maximum allowable size of this item
     max_size: Size<Option<f32>>,
+    max_size_ignoring_aspect_ratio: Size<Option<f32>>,
     /// The cross-alignment of this item
     align_self: AlignSelf,
 
@@ -544,6 +545,10 @@ fn generate_anonymous_flex_items(
                     .max_size()
                     .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
                     .maybe_apply_aspect_ratio(aspect_ratio)
+                    .maybe_add(box_sizing_adjustment),
+                max_size_ignoring_aspect_ratio: child_style
+                    .max_size()
+                    .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
                     .maybe_add(box_sizing_adjustment),
 
                 inset: child_style
@@ -1612,12 +1617,7 @@ fn determine_used_cross_size(
                     let box_sizing_adjustment =
                         if child.box_sizing == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
 
-                    let child_style = tree.get_flexbox_child_style(child.node);
-                    let max_size_ignoring_aspect_ratio = child_style
-                        .max_size()
-                        .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
-                        .maybe_add(box_sizing_adjustment);
-                    drop(child_style);
+                    let max_size_ignoring_aspect_ratio = child.max_size_ignoring_aspect_ratio;
 
                     (line_cross_size - child.margin.cross_axis_sum(constants.dir)).maybe_clamp(
                         child.min_size.cross(constants.dir),
