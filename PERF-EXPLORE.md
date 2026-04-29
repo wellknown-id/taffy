@@ -23,7 +23,7 @@ Permanent record of performance investigations and changes applied to taffy.
 | R15 | grid               | Pre-compute `padding_border_size` on `GridItem`                                                  | **NOT VIABLE** | —          |
 | R16 | grid               | Cache resolved margins on `GridItem`                                                             | **NOT VIABLE** | —          |
 | R17 | block              | Double padding/border resolution in `compute_block_layout` + `compute_inner`                     | **UNKNOWN**    | —          |
-| R18 | flexbox/block/grid | Hidden item loop calls `get_*_child_style` for all children                                      | **UNKNOWN**    | —          |
+| R18 | flexbox/block/grid | Hidden item loop calls `get_*_child_style` for all children                                      | **NEUTRAL**    | —          |
 | R19 | build              | `RUSTFLAGS="-C target-cpu=native"`                                                               | **POSITIVE**   | —          |
 
 ## Detailed Notes
@@ -94,6 +94,18 @@ Attempted to merge passes 1+2 into a single loop accumulating both `proportion_s
 
 The resolution cost is inherent to the varying-size query pattern of the grid track sizing algorithm.
 
+### R18: Hidden item loop style access (NEUTRAL)
+
+**Files:** `src/compute/flexbox.rs`, `src/compute/block.rs`, `src/compute/grid/mod.rs`
+
+After layout completes, the hidden item loop iterates all children and calls `get_*_child_style()` just to check `box_generation_mode()`. The optimization collects `(order, child_id)` pairs of hidden children during initial item generation, then iterates only those pairs in the hidden loop instead of all N children.
+
+**Implemented for flexbox and block.** Grid was skipped because it uses a `Fn() -> Iterator` pattern for `place_grid_items` (called multiple times), making it harder to extract hidden children without significant refactoring.
+
+**Result:** No measurable improvement. The hidden loop doesn't appear in profiling — 95% of time is in `round_layout_inner_sse41`, and `compute_flexbox_layout` (which includes the hidden loop) is only ~2%. The hidden loop iterates ~10 children per node doing trivial array accesses, which is negligible compared to rounding. Changes reverted.
+
+**Impact:** Within noise (<1% difference) on all benchmarks. The optimization would only benefit layouts with many hidden children among many visible ones, which is uncommon.
+
 ## Unexplored Areas
 
 ### R14: Grid distribute_item_space_to_growth_limit
@@ -103,12 +115,6 @@ The function filters tracks 3 times (count, count again, apply). Could potential
 ### R17: Block double padding/border resolution
 
 `compute_block_layout` resolves padding/border against `parent_size.width` (lines 257-258). Then `compute_inner` resolves the same values again from `raw_padding`/`raw_border` (lines 341-342) with the same basis. Could pass the already-resolved values into `compute_inner`, but this requires changing the function signature and `compute_inner` also re-resolves against `container_outer_width` later (lines 436-437), so the benefit is limited to avoiding one of two necessary resolutions.
-
-### R18: Hidden item loop style access
-
-After layout completes, the hidden item loop iterates all children and calls `get_*_child_style()` just to check `box_generation_mode()`. This could be tracked during initial item generation as a bitmap or separate vec, avoiding N style accesses where N is total child count.
-
-**Applies to:** flexbox (line 378), block (line 483), grid (line 561).
 
 ### R19: target-cpu=native (POSITIVE, external)
 
