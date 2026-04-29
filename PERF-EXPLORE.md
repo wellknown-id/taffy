@@ -4,27 +4,27 @@ Permanent record of performance investigations and changes applied to taffy.
 
 ## Summary of Results
 
-| ID | Area | Description | Result | Commit |
-|----|------|-------------|--------|--------|
-| R1 | round_layout | SSE4.1 runtime dispatch for `round_layout_inner` | **POSITIVE** | `44a3cce1` |
-| R2 | round_layout | Subexpression caching (`round(cx)`, `round(cy)` etc) | **POSITIVE** | `44a3cce1` |
-| R3 | round_layout | SIMD batch `_mm_round_ps` (4 floats at once) | **NEGATIVE** | — |
-| R4 | round_layout | Integer-based `round()` replacing `(v+0.5).floor()` | **NEGATIVE** | — |
-| R5 | round_layout | `f32::round()` replacing `(v+0.5).floor()` | **NEGATIVE** | — |
-| R6 | flexbox | Eliminate per-iteration `Vec<&mut FlexItem>` in `resolve_flexible_lengths` | **POSITIVE** | `44a3cce1` |
-| R7 | flexbox | Cache `box_sizing` on `FlexItem`, avoid re-fetching `child_style` in `determine_used_cross_size` | **POSITIVE** | `27fa775c` |
-| R8 | flexbox | Resolve padding/border once in `generate_anonymous_flex_items` | **POSITIVE** | `27fa775c` |
-| R9 | flexbox | Compute `padding + border` once in `determine_flex_base_size` | **POSITIVE** | `27fa775c` |
-| R10 | flexbox | Cache min/max cross in `determine_hypothetical_cross_size` | **POSITIVE** | `27fa775c` |
-| R11 | grid | Single-pass `spanned_track_limit` / `spanned_fixed_track_limit` | **POSITIVE** | `cb60b382` |
-| R12 | grid | Merge count+sum in `stretch_auto_tracks` | **POSITIVE** | `cb60b382` |
-| R13 | grid | Merge triple iteration in `distribute_space_up_to_limits` | **NEGATIVE** | — |
-| R14 | grid | Merge triple filter in `distribute_item_space_to_growth_limit` | **UNKNOWN** | — |
-| R15 | grid | Pre-compute `padding_border_size` on `GridItem` | **NOT VIABLE** | — |
-| R16 | grid | Cache resolved margins on `GridItem` | **NOT VIABLE** | — |
-| R17 | block | Double padding/border resolution in `compute_block_layout` + `compute_inner` | **UNKNOWN** | — |
-| R18 | flexbox/block/grid | Hidden item loop calls `get_*_child_style` for all children | **UNKNOWN** | — |
-| R19 | build | `RUSTFLAGS="-C target-cpu=native"` | **POSITIVE** | — |
+| ID  | Area               | Description                                                                                      | Result         | Commit     |
+| --- | ------------------ | ------------------------------------------------------------------------------------------------ | -------------- | ---------- |
+| R1  | round_layout       | SSE4.1 runtime dispatch for `round_layout_inner`                                                 | **POSITIVE**   | `44a3cce1` |
+| R2  | round_layout       | Subexpression caching (`round(cx)`, `round(cy)` etc)                                             | **POSITIVE**   | `44a3cce1` |
+| R3  | round_layout       | SIMD batch `_mm_round_ps` (4 floats at once)                                                     | **NEGATIVE**   | —          |
+| R4  | round_layout       | Integer-based `round()` replacing `(v+0.5).floor()`                                              | **NEGATIVE**   | —          |
+| R5  | round_layout       | `f32::round()` replacing `(v+0.5).floor()`                                                       | **NEGATIVE**   | —          |
+| R6  | flexbox            | Eliminate per-iteration `Vec<&mut FlexItem>` in `resolve_flexible_lengths`                       | **POSITIVE**   | `44a3cce1` |
+| R7  | flexbox            | Cache `box_sizing` on `FlexItem`, avoid re-fetching `child_style` in `determine_used_cross_size` | **POSITIVE**   | `27fa775c` |
+| R8  | flexbox            | Resolve padding/border once in `generate_anonymous_flex_items`                                   | **POSITIVE**   | `27fa775c` |
+| R9  | flexbox            | Compute `padding + border` once in `determine_flex_base_size`                                    | **POSITIVE**   | `27fa775c` |
+| R10 | flexbox            | Cache min/max cross in `determine_hypothetical_cross_size`                                       | **POSITIVE**   | `27fa775c` |
+| R11 | grid               | Single-pass `spanned_track_limit` / `spanned_fixed_track_limit`                                  | **POSITIVE**   | `cb60b382` |
+| R12 | grid               | Merge count+sum in `stretch_auto_tracks`                                                         | **POSITIVE**   | `cb60b382` |
+| R13 | grid               | Merge triple iteration in `distribute_space_up_to_limits`                                        | **NEGATIVE**   | —          |
+| R14 | grid               | Merge triple filter in `distribute_item_space_to_growth_limit`                                   | **UNKNOWN**    | —          |
+| R15 | grid               | Pre-compute `padding_border_size` on `GridItem`                                                  | **NOT VIABLE** | —          |
+| R16 | grid               | Cache resolved margins on `GridItem`                                                             | **NOT VIABLE** | —          |
+| R17 | block              | Double padding/border resolution in `compute_block_layout` + `compute_inner`                     | **UNKNOWN**    | —          |
+| R18 | flexbox/block/grid | Hidden item loop calls `get_*_child_style` for all children                                      | **UNKNOWN**    | —          |
+| R19 | build              | `RUSTFLAGS="-C target-cpu=native"`                                                               | **POSITIVE**   | —          |
 
 ## Detailed Notes
 
@@ -61,6 +61,7 @@ Attempted to batch 16 scalar `roundss` calls into 4x `roundps` (4 floats at once
 ### R4: Integer-based round() (NEGATIVE)
 
 Replaced `(value + 0.5).floor()` with `value as i32` truncation + diff check:
+
 ```rust
 let i = value as i32;
 let diff = value - (i as f32);
@@ -76,6 +77,7 @@ if diff >= 0.5 { (i + 1) as f32 } else if diff <= -0.5 { (i - 1) as f32 } else {
 **File:** `src/compute/grid/track_sizing.rs`
 
 The inner loop of `distribute_space_up_to_limits` iterates tracks 3 times per loop iteration:
+
 1. Compute `track_distribution_proportion_sum` (filter + map + sum)
 2. Compute `min_increase_limit` (filter + map + min)
 3. Apply increase (filter + mutation)
@@ -135,10 +137,10 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release --example microbench --fe
 
 Collected on the repo HEAD before any optimizations, with `--features flexbox,taffy_tree`:
 
-| Benchmark | Before | After all opts | Speedup |
-|-----------|--------|----------------|---------|
-| Deep fixed tree (10K nodes, branching=10) | 363.89µs | ~158µs | **2.3x** |
-| Wide auto tree (1 container + 1000 auto children) | 32.87µs | ~13µs | **2.5x** |
-| Wide fixed tree (1K fixed children) | 37.08µs | ~13µs | **2.9x** |
-| Nested wide auto tree (10K nodes, wrapping) | 354.02µs | ~166µs | **2.1x** |
-| Grid 10x10 uniform (100 cells) | — | ~1.16µs | baseline |
+| Benchmark                                         | Before   | After all opts | Speedup  |
+| ------------------------------------------------- | -------- | -------------- | -------- |
+| Deep fixed tree (10K nodes, branching=10)         | 363.89µs | ~158µs         | **2.3x** |
+| Wide auto tree (1 container + 1000 auto children) | 32.87µs  | ~13µs          | **2.5x** |
+| Wide fixed tree (1K fixed children)               | 37.08µs  | ~13µs          | **2.9x** |
+| Nested wide auto tree (10K nodes, wrapping)       | 354.02µs | ~166µs         | **2.1x** |
+| Grid 10x10 uniform (100 cells)                    | —        | ~1.16µs        | baseline |
