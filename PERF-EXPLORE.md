@@ -27,6 +27,7 @@ Permanent record of performance investigations and changes applied to taffy.
 | R19 | build              | `RUSTFLAGS="-C target-cpu=native"`                                                               | **POSITIVE**   | —          |
 | R20 | flexbox            | Cache `max_size_ignoring_aspect_ratio` on `FlexItem`                                             | **POSITIVE**   | —          |
 | R21 | round_layout       | Skip rounding for already-integer values                                                         | **NEGATIVE**   | —          |
+| R22 | round_layout       | Skip hidden subtrees during rounding                                                              | **NEGATIVE**   | —          |
 
 ## Detailed Notes
 
@@ -160,6 +161,28 @@ The 94% dominance of `round_layout_inner` means any optimization to the non-roun
 - `RUSTFLAGS="-C target-cpu=native"` — lets the compiler use AVX/SSE4.1 everywhere, not just in the dispatch wrapper
 - Disabling rounding via `TaffyTree::set_use_rounding(false)` for applications that don't need pixel-aligned layouts
 - Reducing tree depth/width at the application level
+
+### R22: Skip hidden subtrees during rounding (NEGATIVE)
+
+**File:** `src/compute/mod.rs`
+
+Attempted to detect hidden subtrees (all-zero layouts) during `round_layout_inner_sse41` and skip both the rounding math and the recursive descent. Added a 14-condition zero check (size, location, border, padding, scrollbar) plus `child_count > 0`, routing to a lightweight `round_hidden_subtree` that copies layouts through without rounding.
+
+**Results:**
+
+| Benchmark | Baseline | With skip | Change |
+|---|---|---|---|
+| Deep fixed (10K, no hidden) | 134µs | 162µs | -21% regression |
+| Wide auto (1K, auto children) | 11µs | 6.4µs | +42% faster |
+| Wide fixed (1K, fixed children) | 11µs | 13.6µs | -24% regression |
+| Nested (10K, wrapping) | 130µs | 76µs | +42% faster |
+| Deep with 50% hidden | 12.3µs | 15.3µs | -24% regression |
+
+**Why it regresses on most benchmarks:** The 14-condition zero check (14 `== 0.0` comparisons + branch) costs more than the 16 `roundss` instructions it saves when the check fails (the common case for non-hidden nodes). The `roundss` instruction is 1-cycle latency, making it faster to "just round" than to "check then maybe round."
+
+**Why even the hidden benchmark regresses:** The hidden subtree's visible siblings and parents all fail the check, paying the comparison cost without any savings.
+
+**Lesson:** At the instruction level, `roundss` is as cheap as a comparison. Algorithmic improvements that add checks before each rounding call are net-negative. The only way to improve `round_layout` is to eliminate the rounding traversal entirely (e.g., by fusing it into the layout pass, or by using `set_use_rounding(false)`).
 
 ## Profiling Methodology
 
