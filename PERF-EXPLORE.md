@@ -142,6 +142,25 @@ Attempted to skip the entire rounding computation when all layout values are alr
 
 **Lesson:** Don't try to guard fast hardware instructions with slower software checks. The SSE4.1 `roundss` is already optimal — let it run unconditionally.
 
+## Overall Conclusion
+
+After 22 investigations (R1-R22), the taffy layout library is well-optimized. The performance profile is:
+
+| Function / Area            | % Runtime | Actionable?                          |
+| -------------------------- | --------- | ------------------------------------- |
+| `round_layout_inner_sse41` | ~94%      | Already optimal (SSE4.1 `roundss`)   |
+| `cache_get`                | ~1.2%     | Already efficient (early `is_empty`)  |
+| `Map Iterator::next`       | ~1.3%     | Inherent iterator overhead            |
+| `compute_flexbox_layout`   | ~0.9%     | Inherent algorithm overhead           |
+| Everything else            | ~2.6%     | Allocations, misc                     |
+
+The 94% dominance of `round_layout_inner` means any optimization to the non-rounding code saves at most 6% total, and even that requires halving the cost of ALL non-rounding code. The SSE4.1 `roundss` instruction is a single-uop, 1-cycle-latency operation — there is no faster way to round floats on x86_64.
+
+**Remaining avenues for further improvement (all external to the library):**
+- `RUSTFLAGS="-C target-cpu=native"` — lets the compiler use AVX/SSE4.1 everywhere, not just in the dispatch wrapper
+- Disabling rounding via `TaffyTree::set_use_rounding(false)` for applications that don't need pixel-aligned layouts
+- Reducing tree depth/width at the application level
+
 ## Profiling Methodology
 
 ```bash
