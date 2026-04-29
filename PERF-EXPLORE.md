@@ -22,7 +22,7 @@ Permanent record of performance investigations and changes applied to taffy.
 | R14 | grid               | Merge triple filter in `distribute_item_space_to_growth_limit`                                   | **UNKNOWN**    | —          |
 | R15 | grid               | Pre-compute `padding_border_size` on `GridItem`                                                  | **NOT VIABLE** | —          |
 | R16 | grid               | Cache resolved margins on `GridItem`                                                             | **NOT VIABLE** | —          |
-| R17 | block              | Double padding/border resolution in `compute_block_layout` + `compute_inner`                     | **UNKNOWN**    | —          |
+| R17 | block              | Double padding/border resolution in `compute_block_layout` + `compute_inner`                     | **NEUTRAL**    | —          |
 | R18 | flexbox/block/grid | Hidden item loop calls `get_*_child_style` for all children                                      | **NEUTRAL**    | —          |
 | R19 | build              | `RUSTFLAGS="-C target-cpu=native"`                                                               | **POSITIVE**   | —          |
 
@@ -112,9 +112,17 @@ After layout completes, the hidden item loop iterates all children and calls `ge
 
 The function filters tracks 3 times (count, count again, apply). Could potentially merge into a single count+apply pass. Dependent on understanding why R13's merge approach regressed — the same subtlety around filter conditions likely applies.
 
-### R17: Block double padding/border resolution
+### R17: Block double padding/border resolution (NEUTRAL)
 
-`compute_block_layout` resolves padding/border against `parent_size.width` (lines 257-258). Then `compute_inner` resolves the same values again from `raw_padding`/`raw_border` (lines 341-342) with the same basis. Could pass the already-resolved values into `compute_inner`, but this requires changing the function signature and `compute_inner` also re-resolves against `container_outer_width` later (lines 436-437), so the benefit is limited to avoiding one of two necessary resolutions.
+**File:** `src/compute/block.rs`
+
+`compute_block_layout` resolves padding/border against `parent_size.width` (lines 257-258). Then `compute_inner` resolves the same values again from `raw_padding`/`raw_border` (lines 341-342) with the same basis (`parent_size.width`). A third resolution at lines 436-437 uses `Some(container_outer_width)` which is a different basis and must remain.
+
+**Implemented:** Added `pre_padding`/`pre_border` parameters to `compute_inner`, passed the already-resolved values from `compute_block_layout`, eliminating the duplicate resolution.
+
+**Result:** No measurable improvement. Baseline ~134µs vs change ~134µs on deep tree benchmark. The duplicate resolution (2 trivial calls to `resolve_or_zero`) is negligible compared to the 95% `round_layout` dominance. Changes reverted.
+
+**Assessment:** Block layout is rarely a bottleneck. The optimization is correct but the benefit is too small to justify the added parameter complexity.
 
 ### R19: target-cpu=native (POSITIVE, external)
 
