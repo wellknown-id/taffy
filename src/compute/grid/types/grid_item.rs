@@ -196,20 +196,14 @@ impl GridItem {
         resolve_calc_value: &dyn Fn(*const (), f32) -> f32,
     ) -> Option<f32> {
         let spanned_tracks = &axis_tracks[self.track_range_excluding_lines(axis)];
-        let tracks_all_fixed = spanned_tracks.iter().all(|track| {
-            track.max_track_sizing_function.definite_limit(axis_parent_size, resolve_calc_value).is_some()
-        });
-        if tracks_all_fixed {
-            let limit: f32 = spanned_tracks
-                .iter()
-                .map(|track| {
-                    track.max_track_sizing_function.definite_limit(axis_parent_size, resolve_calc_value).unwrap()
-                })
-                .sum();
-            Some(limit)
-        } else {
-            None
+        let mut sum = 0.0_f32;
+        for track in spanned_tracks.iter() {
+            match track.max_track_sizing_function.definite_limit(axis_parent_size, resolve_calc_value) {
+                Some(val) => sum += val,
+                None => return None,
+            }
         }
+        Some(sum)
     }
 
     /// Similar to the spanned_track_limit, but excludes FitContent arguments from the limit.
@@ -222,20 +216,14 @@ impl GridItem {
         resolve_calc_value: &dyn Fn(*const (), f32) -> f32,
     ) -> Option<f32> {
         let spanned_tracks = &axis_tracks[self.track_range_excluding_lines(axis)];
-        let tracks_all_fixed = spanned_tracks.iter().all(|track| {
-            track.max_track_sizing_function.definite_value(axis_parent_size, resolve_calc_value).is_some()
-        });
-        if tracks_all_fixed {
-            let limit: f32 = spanned_tracks
-                .iter()
-                .map(|track| {
-                    track.max_track_sizing_function.definite_value(axis_parent_size, resolve_calc_value).unwrap()
-                })
-                .sum();
-            Some(limit)
-        } else {
-            None
+        let mut sum = 0.0_f32;
+        for track in spanned_tracks.iter() {
+            match track.max_track_sizing_function.definite_value(axis_parent_size, resolve_calc_value) {
+                Some(val) => sum += val,
+                None => return None,
+            }
         }
+        Some(sum)
     }
 
     /// Compute the known_dimensions to be passed to the child sizing functions

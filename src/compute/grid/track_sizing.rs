@@ -1334,10 +1334,15 @@ fn stretch_auto_tracks(
     axis_min_size: Option<f32>,
     axis_available_space_for_expansion: AvailableSpace,
 ) {
-    let num_auto_tracks = axis_tracks.iter().filter(|track| track.max_track_sizing_function.is_auto()).count();
+    let mut num_auto_tracks = 0usize;
+    let mut used_space = 0.0_f32;
+    for track in axis_tracks.iter() {
+        used_space += track.base_size;
+        if track.max_track_sizing_function.is_auto() {
+            num_auto_tracks += 1;
+        }
+    }
     if num_auto_tracks > 0 {
-        let used_space: f32 = axis_tracks.iter().map(|track| track.base_size).sum();
-
         // If the free space is indefinite, but the grid container has a definite min-width/height
         // use that size to calculate the free space for this step instead.
         let free_space = if axis_available_space_for_expansion.is_definite() {
