@@ -25,7 +25,6 @@ struct Node {
     text_data: Option<TextContext>,
     image_data: Option<ImageContext>,
     cache: Cache,
-    unrounded_layout: Layout,
     final_layout: Layout,
     children: Vec<usize>,
 }
@@ -38,7 +37,6 @@ impl Default for Node {
             text_data: None,
             image_data: None,
             cache: Cache::new(),
-            unrounded_layout: Layout::with_order(0),
             final_layout: Layout::with_order(0),
             children: Vec::new(),
         }
@@ -151,7 +149,7 @@ impl taffy::LayoutPartialTree for Tree {
     }
 
     fn set_unrounded_layout(&mut self, node_id: NodeId, layout: &Layout) {
-        self.node_from_id_mut(node_id).unrounded_layout = *layout;
+        self.node_from_id_mut(node_id).final_layout = *layout;
     }
 
     fn resolve_calc_value(&self, _val: *const (), _basis: f32) -> f32 {
@@ -248,7 +246,7 @@ impl taffy::LayoutGridContainer for Tree {
 
 impl taffy::RoundTree for Tree {
     fn get_unrounded_layout(&self, node_id: NodeId) -> Layout {
-        self.node_from_id(node_id).unrounded_layout
+        self.node_from_id(node_id).final_layout
     }
 
     fn set_final_layout(&mut self, node_id: NodeId, layout: &Layout) {

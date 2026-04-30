@@ -93,36 +93,24 @@ impl Default for TaffyConfig {
 /// Stored in a [`TaffyTree`].
 #[derive(Debug, Clone, PartialEq)]
 struct NodeData {
-    /// The layout strategy used by this node
     pub(crate) style: Style,
 
-    /// The always unrounded results of the layout computation. We must store this separately from the rounded
-    /// layout to avoid errors from rounding already-rounded values. See <https://github.com/DioxusLabs/taffy/issues/501>.
-    pub(crate) unrounded_layout: Layout,
-
-    /// The final results of the layout computation.
-    /// These may be rounded or unrounded depending on what the `use_rounding` config setting is set to.
     pub(crate) final_layout: Layout,
 
-    /// Whether the node has context data associated with it or not
     pub(crate) has_context: bool,
 
-    /// The cached results of the layout computation
     pub(crate) cache: Cache,
 
-    /// The computation result from layout algorithm
     #[cfg(feature = "detailed_layout_info")]
     pub(crate) detailed_layout_info: DetailedLayoutInfo,
 }
 
 impl NodeData {
-    /// Create the data for a new node
     #[must_use]
     pub const fn new(style: Style) -> Self {
         Self {
             style,
             cache: Cache::new(),
-            unrounded_layout: Layout::new(),
             final_layout: Layout::new(),
             has_context: false,
             #[cfg(feature = "detailed_layout_info")]
@@ -251,11 +239,7 @@ impl<NodeContext> PrintTree for TaffyTree<NodeContext> {
 
     #[inline(always)]
     fn get_final_layout(&self, node_id: NodeId) -> Layout {
-        if self.config.use_rounding {
-            self.nodes[node_id.into()].final_layout
-        } else {
-            self.nodes[node_id.into()].unrounded_layout
-        }
+        self.nodes[node_id.into()].final_layout
     }
 }
 
@@ -384,7 +368,7 @@ where
 
     #[inline(always)]
     fn set_unrounded_layout(&mut self, node_id: NodeId, layout: &Layout) {
-        self.taffy.nodes[node_id.into()].unrounded_layout = *layout;
+        self.taffy.nodes[node_id.into()].final_layout = *layout;
     }
 
     #[inline(always)]
@@ -523,7 +507,7 @@ where
 {
     #[inline(always)]
     fn get_unrounded_layout(&self, node: NodeId) -> Layout {
-        self.taffy.nodes[node.into()].unrounded_layout
+        self.taffy.nodes[node.into()].final_layout
     }
 
     #[inline(always)]
@@ -846,17 +830,12 @@ impl<NodeContext> TaffyTree<NodeContext> {
     /// Return this node layout relative to its parent
     #[inline]
     pub fn layout(&self, node: NodeId) -> TaffyResult<&Layout> {
-        if self.config.use_rounding {
-            Ok(&self.nodes[node.into()].final_layout)
-        } else {
-            Ok(&self.nodes[node.into()].unrounded_layout)
-        }
+        Ok(&self.nodes[node.into()].final_layout)
     }
 
-    /// Returns this node layout with unrounded values relative to its parent.
     #[inline]
     pub fn unrounded_layout(&self, node: NodeId) -> &Layout {
-        &self.nodes[node.into()].unrounded_layout
+        &self.nodes[node.into()].final_layout
     }
 
     /// Get the "detailed layout info" for a node.

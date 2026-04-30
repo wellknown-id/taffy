@@ -227,7 +227,6 @@ pub fn round_layout(tree: &mut impl RoundTree, node_id: NodeId) {
     }
     round_layout_inner(tree, node_id, 0.0, 0.0);
 
-    /// Recursive function to apply rounding to all descendents
     fn round_layout_inner(tree: &mut impl RoundTree, node_id: NodeId, cumulative_x: f32, cumulative_y: f32) {
         let unrounded_layout = tree.get_unrounded_layout(node_id);
         let mut layout = unrounded_layout;
@@ -256,7 +255,10 @@ pub fn round_layout(tree: &mut impl RoundTree, node_id: NodeId) {
         layout.padding.bottom = cyh_r - round(cy + unrounded_layout.size.height - unrounded_layout.padding.bottom);
 
         #[cfg(feature = "content_size")]
-        round_content_size(&mut layout, unrounded_layout.content_size, cx, cy);
+        {
+            layout.content_size.width = round(cx + unrounded_layout.content_size.width) - cx_r;
+            layout.content_size.height = round(cy + unrounded_layout.content_size.height) - cy_r;
+        }
 
         tree.set_final_layout(node_id, &layout);
 
@@ -324,18 +326,6 @@ pub fn round_layout(tree: &mut impl RoundTree, node_id: NodeId) {
         use std::arch::x86_64::*;
         let v = _mm_set_ss(value + 0.5);
         _mm_cvtss_f32(_mm_floor_ss(v, v))
-    }
-
-    #[cfg(feature = "content_size")]
-    #[inline(always)]
-    fn round_content_size(
-        layout: &mut Layout,
-        unrounded_content_size: Size<f32>,
-        cumulative_x: f32,
-        cumulative_y: f32,
-    ) {
-        layout.content_size.width = round(cumulative_x + unrounded_content_size.width) - round(cumulative_x);
-        layout.content_size.height = round(cumulative_y + unrounded_content_size.height) - round(cumulative_y);
     }
 }
 

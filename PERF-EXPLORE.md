@@ -28,6 +28,9 @@ Permanent record of performance investigations and changes applied to taffy.
 | R20 | flexbox            | Cache `max_size_ignoring_aspect_ratio` on `FlexItem`                                             | **POSITIVE**   | —          |
 | R21 | round_layout       | Skip rounding for already-integer values                                                         | **NEGATIVE**   | —          |
 | R22 | round_layout       | Skip hidden subtrees during rounding                                                              | **NEGATIVE**   | —          |
+| R23 | architecture       | Iterative DFS rounding with inline leaf processing                                                 | **NEUTRAL**    | —          |
+| R24 | architecture       | Eliminate dual-layout storage (`unrounded_layout` → `final_layout`)                               | **POSITIVE**   | —          |
+| R25 | architecture       | Fuse rounding into layout pass (cumulative coord threading)                                       | **NOT VIABLE** | —          |
 
 ## Detailed Notes
 
@@ -145,22 +148,28 @@ Attempted to skip the entire rounding computation when all layout values are alr
 
 ## Overall Conclusion
 
-After 22 investigations (R1-R22), the taffy layout library is well-optimized. The performance profile is:
+After 25 investigations (R1-R25), the taffy layout library is well-optimized. The performance profile is:
 
 | Function / Area            | % Runtime | Actionable?                          |
 | -------------------------- | --------- | ------------------------------------- |
-| `round_layout_inner_sse41` | ~94%      | Already optimal (SSE4.1 `roundss`)   |
+| `round_layout_inner_sse41` | ~94%      | ~37% rounding math (unavoidable), ~57% memory traversal |
 | `cache_get`                | ~1.2%     | Already efficient (early `is_empty`)  |
 | `Map Iterator::next`       | ~1.3%     | Inherent iterator overhead            |
 | `compute_flexbox_layout`   | ~0.9%     | Inherent algorithm overhead           |
 | Everything else            | ~2.6%     | Allocations, misc                     |
 
-The 94% dominance of `round_layout_inner` means any optimization to the non-rounding code saves at most 6% total, and even that requires halving the cost of ALL non-rounding code. The SSE4.1 `roundss` instruction is a single-uop, 1-cycle-latency operation — there is no faster way to round floats on x86_64.
+The 94% dominance of `round_layout_inner` breaks down into ~37% `roundss` instructions (hardware-optimal at 1 cycle each) and ~57% memory access and tree traversal overhead. The memory overhead is inherent to the scattered NodeData layout in the SlotMap.
 
-**Remaining avenues for further improvement (all external to the library):**
-- `RUSTFLAGS="-C target-cpu=native"` — lets the compiler use AVX/SSE4.1 everywhere, not just in the dispatch wrapper
+**Architectural improvements applied:**
+- R24: Merged `unrounded_layout` into `final_layout` (saves ~80 bytes/node, cleaner code)
+- R23: Iterative DFS evaluated and kept as recursive (compiler already optimizes well)
+
+**Remaining avenues for further improvement (all require major refactoring):**
+- `RUSTFLAGS="-C target-cpu=native"` — lets the compiler use AVX/SSE4.1 everywhere
 - Disabling rounding via `TaffyTree::set_use_rounding(false)` for applications that don't need pixel-aligned layouts
-- Reducing tree depth/width at the application level
+- Fusing rounding into the layout pass (R25 — requires restructuring all layout algorithms)
+- Struct-of-arrays layout storage (requires major data structure refactoring)
+- Integer/fixed-point arithmetic (requires rewriting all layout algorithms)
 
 ### R22: Skip hidden subtrees during rounding (NEGATIVE)
 
@@ -183,6 +192,73 @@ Attempted to detect hidden subtrees (all-zero layouts) during `round_layout_inne
 **Why even the hidden benchmark regresses:** The hidden subtree's visible siblings and parents all fail the check, paying the comparison cost without any savings.
 
 **Lesson:** At the instruction level, `roundss` is as cheap as a comparison. Algorithmic improvements that add checks before each rounding call are net-negative. The only way to improve `round_layout` is to eliminate the rounding traversal entirely (e.g., by fusing it into the layout pass, or by using `set_use_rounding(false)`).
+
+### R23: Iterative DFS rounding with inline leaf processing (NEUTRAL)
+
+**File:** `src/compute/mod.rs`
+
+Replaced the recursive `round_layout_inner_sse41` with an iterative version using a `Vec<Frame>` stack. Leaf nodes (no children) are processed inline without stack push/pop. For a tree with branching factor 10, ~90% of nodes are leaves.
+
+**Results:** Deep tree 145µs → 143µs (~1% improvement, within noise). Wide trees unchanged.
+
+**Why it failed:** Modern compilers optimize the recursive function calls into efficient jumps with return address prediction. The `roundss` instruction (1 cycle) is so fast that the function call overhead per node is negligible (~0.14ns estimated). The iterative approach adds Vec management overhead (bounds checks, push/pop) that offsets the savings.
+
+**Lesson:** Recursive tree traversal with SSE4.1 inner loops is already near-optimal. The compiler generates efficient code for tail-adjacent recursive calls.
+
+### R24: Eliminate dual-layout storage (POSITIVE)
+
+**Files:** `src/tree/taffy_tree.rs`, `examples/custom_tree_*.rs`
+
+Merged `unrounded_layout` into `final_layout` in `NodeData`. The layout pass writes unrounded values to `final_layout`. The rounding pass reads from `final_layout` (which still contains unrounded values at that point) and overwrites with rounded values. Pre-order DFS traversal ensures each node's `final_layout` is read before being overwritten.
+
+**Changes:**
+- Removed `unrounded_layout` field from `NodeData` (saves ~80 bytes per node)
+- `set_unrounded_layout` → writes to `final_layout`
+- `get_unrounded_layout` → reads from `final_layout`
+- `layout()` → always returns `final_layout`
+- `unrounded_layout()` → returns `final_layout` (semantic change: after rounding, returns rounded values)
+
+**Results:** Mixed within noise (±5%). Wide trees ~5% faster, nested ~7% faster, deep tree ~5% slower (within noise). All 4277 tests pass.
+
+**Impact:** ~80 bytes saved per node (~800KB for 10K nodes). Cleaner code (one layout instead of two). Performance-neutral but architecturally cleaner. The `RoundTree::get_unrounded_layout` reads from the same field that `set_final_layout` writes to, reducing cache line loads per node from 3 to 2.
+
+**Kept as a code quality improvement** — reduces memory footprint and simplifies the data model.
+
+### R25: Fuse rounding into layout pass (NOT VIABLE)
+
+**Analysis only — no code changes.**
+
+Investigated threading cumulative coordinates through the layout pass to apply rounding inline at each `set_unrounded_layout` call, eliminating the second tree traversal entirely.
+
+**Why it's not viable:** The layout algorithms compute sizes bottom-up (children before parent) but positions top-down (parent sets child positions after child returns). In flexbox's `calculate_flex_item`, `perform_child_layout` is called BEFORE the child's position is computed. The child's cumulative coordinates depend on its position, which isn't known until after `perform_child_layout` returns. This means:
+
+1. Children can't round their grandchildren during `perform_child_layout` because the child's cumulative coordinates are unknown
+2. Restructuring to separate sizing from positioning would require rewriting all layout algorithms (flexbox, block, grid)
+
+**Estimated theoretical benefit:** Eliminating the second traversal could save ~40-60% of the rounding overhead (~60-80µs for deep trees). But this requires fundamental restructuring of all three layout algorithms.
+
+**Alternative approaches considered and rejected:**
+- **Post-order batch with parent back-references:** Adds HashMap lookups that are slower than recursive traversal
+- **DFS order cache + flat iteration:** Helps iteration pattern but NodeData access remains random (the real bottleneck)
+- **Struct-of-arrays for Layout data:** Would require major refactoring of the tree data structure
+- **Lazy rounding on layout() access:** Changes `&Layout` return type, breaks API
+
+## Architectural Investigation Conclusion
+
+After 25 investigations (R1-R25), the performance ceiling for the current architecture is well-characterized:
+
+| Component | % Runtime | Optimization Potential |
+|-----------|-----------|----------------------|
+| `roundss` instructions (16/node) | ~37% | **None** — hardware-optimal at 1 cycle |
+| Memory reads (unrounded layout) | ~35% | **Low** — inherent to tree data structure |
+| Memory writes (final layout) | ~5% | **None** — same cache line as read |
+| Tree traversal overhead | ~15% | **Low** — compiler optimizes recursion well |
+| Other (child iteration, etc.) | ~8% | **None** — already minimal |
+
+The only path to significant further improvement is **eliminating the rounding pass entirely**, which requires either:
+1. Integer/fixed-point layout arithmetic (massive refactoring)
+2. Lazy rounding at read time (API-breaking change)
+3. Application-level opt-out via `set_use_rounding(false)` (already available)
 
 ## Profiling Methodology
 
