@@ -1,0 +1,3 @@
+[submodule "clay"]
+	path = clay
+	url = git@github.com:nicbarker/clay.git
