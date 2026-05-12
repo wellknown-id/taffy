@@ -210,7 +210,15 @@ impl FloatContext {
         if !old_segment.y.contains(&divide_at_y) || old_segment.y.start == divide_at_y {
             debug_log!("old_segment", dbg:&mut *old_segment);
             debug_log!("divide_at_y", dbg:divide_at_y);
-            assert!(old_segment.y.contains(&divide_at_y) && old_segment.y.start != divide_at_y);
+            // Gracefully handle edge case: clamp divide_at_y and skip if at start
+            if divide_at_y <= old_segment.y.start {
+                return;
+            }
+            let clamped_y = divide_at_y.min(old_segment.y.end);
+            let new_segment = Segment { insets: old_segment.insets, y: clamped_y..old_segment.y.end };
+            old_segment.y.end = clamped_y;
+            self.segments.splice((idx + 1)..(idx + 1), core::iter::once(new_segment));
+            return;
         }
         old_segment.y.end = divide_at_y;
 
