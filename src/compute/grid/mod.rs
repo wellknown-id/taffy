@@ -139,11 +139,19 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         return LayoutOutput::from_outer_size(Size { width, height });
     }
 
-    let get_child_styles_iter =
-        |node| tree.child_ids(node).map(|child_node: NodeId| tree.get_grid_child_style(child_node));
-    let child_styles_iter = get_child_styles_iter(node);
-
     // 2. Resolve the explicit grid
+
+    // Helper to iterate in-flow children (excluding absolutely positioned and display:none)
+    fn in_flow_child_styles_iter<Tree: LayoutGridContainer>(tree: &Tree, node: NodeId) -> impl Iterator<Item = Tree::GridItemStyle<'_>> {
+        tree.child_ids(node).filter_map(move |child_node: NodeId| {
+            let style = tree.get_grid_child_style(child_node);
+            if style.box_generation_mode() == BoxGenerationMode::None || style.position() == Position::Absolute {
+                None
+            } else {
+                Some(style)
+            }
+        })
+    }
 
     // This is very similar to the inner_node_size except if the inner_node_size is not definite but the node
     // has a min- or max- size style then that will be used in it's place.
@@ -195,7 +203,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     // Estimate the number of rows and columns in the implicit grid (= the entire grid)
     // This is necessary as part of placement. Doing it early here is a perf optimisation to reduce allocations.
     let (est_col_counts, est_row_counts) =
-        compute_grid_size_estimate(explicit_col_count, explicit_row_count, direction, child_styles_iter);
+        compute_grid_size_estimate(explicit_col_count, explicit_row_count, direction, in_flow_child_styles_iter(tree, node));
 
     // 4. Grid Item Placement
     // Match items (children) to a definite grid position (row start/end and column start/end position)
