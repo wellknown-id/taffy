@@ -349,6 +349,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     // In the case of an indefinitely sized container these resolve to zero during the "Initialise Tracks" step
     // and therefore need to be re-resolved here based on the content-sized content box of the container
     if !available_grid_space.width.is_definite() {
+        let pre_sum: f32 = columns.iter().map(|t| t.base_size).sum();
         for column in &mut columns {
             let min: Option<f32> = column
                 .min_track_sizing_function
@@ -358,8 +359,18 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
                 .resolved_percentage_size(container_content_box.width, |val, basis| tree.calc(val, basis));
             column.base_size = column.base_size.maybe_clamp(min, max);
         }
+        let post_sum: f32 = columns.iter().map(|t| t.base_size).sum();
+        let freed = pre_sum - post_sum;
+        if freed > 0.0 {
+            let auto_count = columns.iter().filter(|t| t.max_track_sizing_function.is_auto()).count();
+            if auto_count > 0 {
+                let per_track = freed / auto_count as f32;
+                columns.iter_mut().filter(|t| t.max_track_sizing_function.is_auto()).for_each(|t| t.base_size += per_track);
+            }
+        }
     }
     if !available_grid_space.height.is_definite() {
+        let pre_sum: f32 = rows.iter().map(|t| t.base_size).sum();
         for row in &mut rows {
             let min: Option<f32> = row
                 .min_track_sizing_function
@@ -368,6 +379,15 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
                 .max_track_sizing_function
                 .resolved_percentage_size(container_content_box.height, |val, basis| tree.calc(val, basis));
             row.base_size = row.base_size.maybe_clamp(min, max);
+        }
+        let post_sum: f32 = rows.iter().map(|t| t.base_size).sum();
+        let freed = pre_sum - post_sum;
+        if freed > 0.0 {
+            let auto_count = rows.iter().filter(|t| t.max_track_sizing_function.is_auto()).count();
+            if auto_count > 0 {
+                let per_track = freed / auto_count as f32;
+                rows.iter_mut().filter(|t| t.max_track_sizing_function.is_auto()).for_each(|t| t.base_size += per_track);
+            }
         }
     }
 
