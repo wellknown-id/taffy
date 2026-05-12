@@ -338,10 +338,9 @@ pub(super) fn track_sizing_algorithm<Tree: LayoutPartialTree>(
     let axis_available_space_for_expansion = if let Some(available_space) = inner_node_size.get(axis) {
         AvailableSpace::Definite(available_space)
     } else {
-        match available_grid_space.get(axis) {
-            AvailableSpace::MinContent => AvailableSpace::MinContent,
-            AvailableSpace::MaxContent | AvailableSpace::Definite(_) => AvailableSpace::MaxContent,
-        }
+        // For auto-sized containers, flex tracks should expand based on content,
+        // even when the parent provides MinContent constraint.
+        AvailableSpace::MaxContent
     };
 
     // 11.7. Expand Flexible Tracks
