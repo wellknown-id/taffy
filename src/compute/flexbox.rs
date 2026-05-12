@@ -715,7 +715,32 @@ fn determine_flex_base_size(
             .maybe_resolve(container_width, |val, basis| tree.calc(val, basis))
             .maybe_add(box_sizing_adjustment);
 
+        let child_main_size_tag = child_style.size().main(dir).into_raw();
+        let is_min_content = child_main_size_tag.is_min_content();
+        let is_max_content = child_main_size_tag.is_max_content();
         drop(child_style);
+
+        if is_min_content || is_max_content {
+            let intrinsic_available_space = if is_min_content {
+                AvailableSpace::MinContent
+            } else {
+                AvailableSpace::MaxContent
+            };
+            child.size.set_main(
+                dir,
+                Some(tree.measure_child_size(
+                    child.node,
+                    child_known_dimensions,
+                    child_parent_size,
+                    Size::MAX_CONTENT
+                        .with_main(dir, intrinsic_available_space)
+                        .with_cross(dir, cross_axis_available_space),
+                    SizingMode::ContentSize,
+                    dir.main_axis(),
+                    Line::FALSE,
+                )),
+            );
+        }
 
         child.flex_basis = 'flex_basis: {
             // A. If the item has a definite used flex basis, that’s the flex base size.

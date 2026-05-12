@@ -196,6 +196,9 @@ struct BlockItem {
     /// Items that are tables don't have stretch sizing applied to them
     is_table: bool,
 
+    /// Whether the child is a block-level element
+    is_block: bool,
+
     /// Whether the child is a non-independent block or inline node
     is_in_same_bfc: bool,
 
@@ -208,6 +211,10 @@ struct BlockItem {
 
     /// The base size of this item
     size: Size<Option<f32>>,
+    /// Whether the width is from an intrinsic size keyword (min-content, max-content)
+    intrinsic_width: bool,
+    /// Whether the height is from an intrinsic size keyword (min-content, max-content)
+    intrinsic_height: bool,
     /// The minimum allowable size of this item
     min_size: Size<Option<f32>>,
     /// The maximum allowable size of this item
@@ -566,11 +573,19 @@ fn generate_item_list(
             let is_in_same_bfc: bool =
                 is_block && !is_table && position != Position::Absolute && is_not_floated && !is_scroll_container;
 
+            let raw_size_width = child_style.size().width.into_raw();
+            let raw_size_height = child_style.size().height.into_raw();
+            let intrinsic_width = raw_size_width.is_min_or_max_content();
+            let intrinsic_height = raw_size_height.is_min_or_max_content();
+
             BlockItem {
                 node_id: child_node_id,
                 order: order as u32,
                 is_table,
+                is_block,
                 is_in_same_bfc,
+                intrinsic_width,
+                intrinsic_height,
                 #[cfg(feature = "float_layout")]
                 float,
                 #[cfg(feature = "float_layout")]
@@ -833,9 +848,11 @@ fn perform_final_layout_on_in_flow_children(
             } else {
                 item.size
                     .map_width(|width| {
-                        // TODO: Allow stretch-sizing to be conditional, as there are exceptions.
-                        // e.g. Table children of blocks do not stretch fit
-                        Some(width.unwrap_or(stretch_width).maybe_clamp(item.min_size.width, item.max_size.width))
+                        if !item.is_block && item.intrinsic_width {
+                            width
+                        } else {
+                            Some(width.unwrap_or(stretch_width).maybe_clamp(item.min_size.width, item.max_size.width))
+                        }
                     })
                     .maybe_clamp(item.min_size, item.max_size)
             };
