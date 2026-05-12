@@ -13,7 +13,7 @@ use crate::util::debug::debug_log;
 use crate::util::sys::{f32_max, new_vec_with_capacity, Vec};
 use crate::util::MaybeMath;
 use crate::util::{MaybeResolve, ResolveOrZero};
-use crate::{BoxGenerationMode, BoxSizing, Direction};
+use crate::{BoxGenerationMode, BoxSizing, CompactLength, Direction};
 
 use super::common::alignment::apply_alignment_fallback;
 #[cfg(feature = "content_size")]
@@ -39,6 +39,11 @@ struct FlexItem {
 
     /// Whether the item's cross size style is auto
     cross_size_is_auto: bool,
+    /// Whether the main axis size is percentage-based (contains % or calc with %)
+    main_size_is_percent_based: bool,
+    /// The specified size suggestion with percentages resolved to 0
+    /// (used for percentage-based sizes on replaced elements)
+    specified_size_suggestion: Option<f32>,
     /// The box-sizing mode of this item
     box_sizing: BoxSizing,
 
@@ -562,8 +567,24 @@ fn generate_anonymous_flex_items(
                 border,
                 align_self: child_style.align_self().unwrap_or(constants.align_items),
                 cross_size_is_auto: child_style.size().cross(constants.dir).is_auto(),
-                box_sizing: child_style.box_sizing(),
-                overflow: child_style.overflow(),
+                main_size_is_percent_based: {
+                    child_style.size().main(constants.dir).into_raw().uses_percentage()
+                },
+                specified_size_suggestion: {
+                    let raw = child_style.size().main(constants.dir).into_raw();
+                    if raw.uses_percentage() {
+                        let zero_context = Size { width: Some(0.0), height: Some(0.0) };
+                        child_style
+                            .size()
+                            .maybe_resolve(zero_context, |val, basis| tree.calc(val, basis))
+                            .maybe_apply_aspect_ratio(aspect_ratio)
+                            .maybe_add(box_sizing_adjustment)
+                            .main(constants.dir)
+                    } else {
+                        None
+                    }
+                },
+                box_sizing: child_style.box_sizing(),                overflow: child_style.overflow(),
                 scrollbar_width: child_style.scrollbar_width(),
                 flex_grow: child_style.flex_grow(),
                 flex_shrink: child_style.flex_shrink(),
@@ -845,8 +866,13 @@ fn determine_flex_base_size(
 
             // 4.5. Automatic Minimum Size of Flex Items
             // https://www.w3.org/TR/css-flexbox-1/#min-size-auto
-            let clamped_min_content_size =
-                min_content_main_size.maybe_min(child.size.main(dir)).maybe_min(child.max_size.main(dir));
+            let content_based_min = if child.main_size_is_percent_based {
+                let specified = child.specified_size_suggestion.or(child.size.main(dir));
+                min_content_main_size.maybe_max(specified)
+            } else {
+                min_content_main_size.maybe_min(child.size.main(dir))
+            };
+            let clamped_min_content_size = content_based_min.maybe_min(child.max_size.main(dir));
             clamped_min_content_size.maybe_max(padding_border_axes_sums.main(dir))
         });
 
