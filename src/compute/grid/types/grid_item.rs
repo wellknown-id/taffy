@@ -270,10 +270,15 @@ impl GridItem {
                 return None;
             }
             // Apply width based on stretch alignment if:
+            //  - Preferred width is auto
             //  - Alignment style is "stretch"
             //  - The node is not absolutely positioned
             //  - The node does not have auto margins in this axis.
-            if !self.margin.left.is_auto() && !self.margin.right.is_auto() && self.justify_self == AlignSelf::Stretch {
+            if self.size.width.is_auto()
+                && !self.margin.left.is_auto()
+                && !self.margin.right.is_auto()
+                && self.justify_self == AlignSelf::Stretch
+            {
                 return grid_area_minus_item_margins_size.width;
             }
 
@@ -285,10 +290,15 @@ impl GridItem {
 
         let height = height.or_else(|| {
             // Apply height based on stretch alignment if:
+            //  - Preferred height is auto
             //  - Alignment style is "stretch"
             //  - The node is not absolutely positioned
             //  - The node does not have auto margins in this axis.
-            if !self.margin.top.is_auto() && !self.margin.bottom.is_auto() && self.align_self == AlignSelf::Stretch {
+            if self.size.height.is_auto()
+                && !self.margin.top.is_auto()
+                && !self.margin.bottom.is_auto()
+                && self.align_self == AlignSelf::Stretch
+            {
                 return grid_area_minus_item_margins_size.height;
             }
 

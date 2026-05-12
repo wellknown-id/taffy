@@ -122,21 +122,27 @@ pub(super) fn align_and_position_item(
     // Note: if the child has a preferred aspect ratio but neither width or height are set, then the width is stretched
     // and the then height is calculated from the width according the aspect ratio
     // See: https://www.w3.org/TR/css-grid-1/#grid-item-sizing
+    // 
+    // Stretch only applies when the preferred size (width/height) is auto.
+    // Non-auto values like max-content, min-content, or fixed lengths suppress stretch.
+    // See: https://www.w3.org/TR/css-grid-1/#grid-item-sizing
+    let align_vertical = align_self.or(container_alignment_styles.vertical).unwrap_or(AlignSelf::Stretch);
+    let align_horizontal = justify_self.or(container_alignment_styles.horizontal).unwrap_or(AlignSelf::Stretch);
     let alignment_styles = InBothAbsAxis {
-        horizontal: justify_self.or(container_alignment_styles.horizontal).unwrap_or_else(|| {
-            if inherent_size.width.is_some() {
+        horizontal: {
+            if align_horizontal == AlignSelf::Stretch && inherent_size.width.is_none() && !style.size().width.is_auto() {
                 AlignSelf::Start
             } else {
-                AlignSelf::Stretch
+                align_horizontal
             }
-        }),
-        vertical: align_self.or(container_alignment_styles.vertical).unwrap_or_else(|| {
-            if inherent_size.height.is_some() || aspect_ratio.is_some() {
+        },
+        vertical: {
+            if align_vertical == AlignSelf::Stretch && inherent_size.height.is_none() && !style.size().height.is_auto() {
                 AlignSelf::Start
             } else {
-                AlignSelf::Stretch
+                align_vertical
             }
-        }),
+        },
     };
 
     // Note: This is not a bug. It is part of the CSS spec that both horizontal and vertical margins

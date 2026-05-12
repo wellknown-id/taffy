@@ -63,6 +63,8 @@ impl MaybeResolve<Option<f32>, Option<f32>> for Dimension {
             CompactLength::AUTO_TAG => None,
             CompactLength::LENGTH_TAG => Some(self.0.value()),
             CompactLength::PERCENT_TAG => context.map(|dim| dim * self.0.value()),
+            CompactLength::MIN_CONTENT_TAG => None,
+            CompactLength::MAX_CONTENT_TAG => None,
             #[cfg(feature = "calc")]
             _ if self.0.is_calc() => context.map(|dim| calc(self.0.calc_value(), dim)),
             _ => unreachable!(),
