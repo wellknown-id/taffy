@@ -1343,15 +1343,13 @@ fn stretch_auto_tracks(
         }
     }
     if num_auto_tracks > 0 {
-        // If the free space is indefinite, but the grid container has a definite min-width/height
-        // use that size to calculate the free space for this step instead.
+        // Only stretch with definite free space. If the available space is indefinite,
+        // don't distribute — min_size is a border-box minimum and would double-count
+        // padding/border when added to the container's outer size later.
         let free_space = if axis_available_space_for_expansion.is_definite() {
             axis_available_space_for_expansion.compute_free_space(used_space)
         } else {
-            match axis_min_size {
-                Some(size) => size - used_space,
-                None => 0.0,
-            }
+            0.0
         };
         if free_space > 0.0 {
             let extra_space_per_auto_track = free_space / num_auto_tracks as f32;
