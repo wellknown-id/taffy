@@ -264,6 +264,11 @@ impl GridItem {
         // If node is absolutely positioned and width is not set explicitly, then deduce it
         // from left, right and container_content_box if both are set.
         let width = inherent_size.width.or_else(|| {
+            // If the preferred size is percentage-based (depends on containing block),
+            // skip it for known dimensions — it doesn't give us a definite size.
+            if self.size.width.0.uses_percentage() {
+                return None;
+            }
             // Apply width based on stretch alignment if:
             //  - Alignment style is "stretch"
             //  - The node is not absolutely positioned
@@ -367,10 +372,17 @@ impl GridItem {
         inner_node_size: Size<Option<f32>>,
     ) -> f32 {
         let known_dimensions = self.known_dimensions(tree, inner_node_size, available_space);
+        // During intrinsic measurement, set parent_size to indefinite for the measured axis
+        // so that percentage-based size properties resolve as auto, but keep the other axis
+        // definite so that percentage padding/margin/border still resolve correctly.
+        let intrinsic_parent_size = Size {
+            width: if axis == AbstractAxis::Inline { None } else { inner_node_size.width },
+            height: if axis == AbstractAxis::Block { None } else { inner_node_size.height },
+        };
         tree.measure_child_size(
             self.node,
             known_dimensions,
-            inner_node_size,
+            intrinsic_parent_size,
             available_space.map(|opt| match opt {
                 Some(size) => AvailableSpace::Definite(size),
                 None => AvailableSpace::MinContent,
@@ -406,10 +418,14 @@ impl GridItem {
         inner_node_size: Size<Option<f32>>,
     ) -> f32 {
         let known_dimensions = self.known_dimensions(tree, inner_node_size, available_space);
+        let intrinsic_parent_size = Size {
+            width: if axis == AbstractAxis::Inline { None } else { inner_node_size.width },
+            height: if axis == AbstractAxis::Block { None } else { inner_node_size.height },
+        };
         tree.measure_child_size(
             self.node,
             known_dimensions,
-            inner_node_size,
+            intrinsic_parent_size,
             available_space.map(|opt| match opt {
                 Some(size) => AvailableSpace::Definite(size),
                 None => AvailableSpace::MaxContent,
@@ -463,6 +479,12 @@ impl GridItem {
             .maybe_apply_aspect_ratio(self.aspect_ratio)
             .maybe_add(box_sizing_adjustment)
             .get(axis)
+            // Per spec: if the preferred size depends on the containing block (percentage),
+            // skip it for minimum contribution and use min-size / auto minimum instead
+            .filter(|_| {
+                let dim = self.size.get(axis);
+                !dim.0.uses_percentage()
+            })
             .or_else(|| {
                 self.min_size
                     .maybe_resolve(inner_node_size, |val, basis| tree.calc(val, basis))
