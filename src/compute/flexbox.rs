@@ -2062,6 +2062,7 @@ fn calculate_layout_line(
     padding_border: Rect<f32>,
     direction: FlexDirection,
     layout_direction: Direction,
+    cross_axis_reversed: bool,
 ) {
     let mut total_offset_main = if layout_direction.is_rtl() && direction.is_row() {
         container_size.width - padding_border.main_end(direction)
@@ -2070,8 +2071,11 @@ fn calculate_layout_line(
     };
     let line_offset_cross = line.offset_cross;
 
-    let is_rtl_column = layout_direction.is_rtl() && direction.is_column();
-    if is_rtl_column {
+    // For reversed cross axis, DECREMENT the offset before positioning items.
+    // This places items at `total_offset_cross + line_offset_cross` but
+    // with the offset moved back by the line cross size, effectively
+    // positioning the line from the cross-end toward the cross-start.
+    if cross_axis_reversed {
         *total_offset_cross -= line_offset_cross + line.cross_size;
     }
 
@@ -2109,7 +2113,7 @@ fn calculate_layout_line(
         }
     }
 
-    if !is_rtl_column {
+    if !cross_axis_reversed {
         *total_offset_cross += line_offset_cross + line.cross_size;
     }
 }
@@ -2121,45 +2125,75 @@ fn final_layout_pass(
     flex_lines: &mut [FlexLine],
     constants: &AlgoConstants,
 ) -> Size<f32> {
-    let mut total_offset_cross = if constants.is_column && constants.layout_direction.is_rtl() {
-        constants.container_size.width - constants.content_box_inset.cross_end(constants.dir)
+    // Determine the initial cross offset and whether the cross axis is reversed.
+    //
+    // For rows: cross axis is vertical.
+    //   - No wrap-reverse: cross-start = top (content_box_inset.top), lines go DOWN.
+    //   - wrap-reverse: cross-start = bottom (cross_end), lines go UP.
+    //
+    // For columns: cross axis is horizontal.
+    //   - LTR + no wrap-reverse: cross-start = left, lines go RIGHT.
+    //   - RTL + no wrap-reverse: cross-start = right, lines go LEFT.
+    //   - LTR + wrap-reverse: cross-start = right, lines go LEFT.
+    //   - RTL + wrap-reverse: cross-start = left, lines go RIGHT.
+    //   (wrap-reverse cancels RTL because both affect the cross direction for columns)
+    //
+    // `cross_start_pos` is the initial value of `total_offset_cross`.
+    // `cross_axis_reversed` is true when the cross direction is from end to start
+    //   (i.e., offset decreases as we advance through lines).
+    let is_column = constants.dir.is_column();
+    let is_rtl = constants.layout_direction.is_rtl();
+    let (cross_start_pos, cross_axis_reversed) = if constants.is_wrap_reverse {
+        if is_column {
+            // wrap-reverse for columns: reverses the cross axis
+            let start = constants.content_box_inset.cross_start(constants.dir);
+            let end = constants.container_size.cross(constants.dir)
+                - constants.content_box_inset.cross_end(constants.dir);
+            if is_rtl {
+                // RTL + wrap-reverse: RTL reverse + wrap-reverse = LTR (normal)
+                (start, false)
+            } else {
+                // LTR + wrap-reverse: cross reversed
+                (end, true)
+            }
+        } else {
+            // wrap-reverse for rows: cross axis goes bottom-to-top
+            let end = constants.container_size.cross(constants.dir)
+                - constants.content_box_inset.cross_end(constants.dir);
+            (end, true)
+        }
+    } else if is_column && is_rtl {
+        // RTL column (no wrap-reverse): cross axis goes right-to-left
+        let end = constants.container_size.cross(constants.dir)
+            - constants.content_box_inset.cross_end(constants.dir);
+        (end, true)
     } else {
-        constants.content_box_inset.cross_start(constants.dir)
+        // Normal direction
+        let start = constants.content_box_inset.cross_start(constants.dir);
+        (start, false)
     };
+
+    let mut total_offset_cross = cross_start_pos;
 
     #[cfg_attr(not(feature = "content_size"), allow(unused_mut))]
     let mut content_size = Size::ZERO;
 
-    if constants.is_wrap_reverse {
-        for line in flex_lines.iter_mut().rev() {
-            calculate_layout_line(
-                tree,
-                line,
-                &mut total_offset_cross,
-                #[cfg(feature = "content_size")]
-                &mut content_size,
-                constants.container_size,
-                constants.node_inner_size,
-                constants.content_box_inset,
-                constants.dir,
-                constants.layout_direction,
-            );
-        }
-    } else {
-        for line in flex_lines.iter_mut() {
-            calculate_layout_line(
-                tree,
-                line,
-                &mut total_offset_cross,
-                #[cfg(feature = "content_size")]
-                &mut content_size,
-                constants.container_size,
-                constants.node_inner_size,
-                constants.content_box_inset,
-                constants.dir,
-                constants.layout_direction,
-            );
-        }
+    // For reversed cross axis, process lines in normal order and decrement the offset.
+    // For normal cross axis, process lines in normal order and increment the offset.
+    for line in flex_lines.iter_mut() {
+        calculate_layout_line(
+            tree,
+            line,
+            &mut total_offset_cross,
+            #[cfg(feature = "content_size")]
+            &mut content_size,
+            constants.container_size,
+            constants.node_inner_size,
+            constants.content_box_inset,
+            constants.dir,
+            constants.layout_direction,
+            cross_axis_reversed,
+        );
     }
 
     content_size.width += if constants.layout_direction.is_rtl() {
