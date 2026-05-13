@@ -826,8 +826,38 @@ fn perform_final_layout_on_in_flow_children(
                     if has_active_floats {
                         let slot = block_ctx.find_content_slot(min_y, item.clear, None);
                         has_active_floats = slot.segment_id.is_some();
-                        let stretch_width = slot.width - item_non_auto_x_margin_sum;
-                        break 'block (stretch_width, Point { x: slot.x, y: slot.y }, slot.width);
+
+                        // For new-BFC elements widthout explicit clearance,
+                        // check if they fit beside the float. If not, move below all
+                        // floats (CSS 2.2 §9.5.2).
+                        let fits_in_slot = if !item.is_block && item.clear == Clear::None {
+                            let el_width = item
+                                .size
+                                .width
+                                .unwrap_or(container_inner_width - item_non_auto_x_margin_sum);
+                            el_width <= slot.width
+                        } else {
+                            true
+                        };
+
+                        if !fits_in_slot {
+                            let float_bottom =
+                                block_ctx.cleared_threshold(Clear::Both).unwrap_or(0.0);
+                            let y = min_y.max(float_bottom);
+                            let stretch_width = container_inner_width - item_non_auto_x_margin_sum;
+                            break 'block (
+                                stretch_width,
+                                Point { x: resolved_content_box_inset.left, y },
+                                container_inner_width,
+                            );
+                        } else {
+                            let stretch_width = slot.width - item_non_auto_x_margin_sum;
+                            break 'block (
+                                stretch_width,
+                                Point { x: slot.x, y: slot.y },
+                                slot.width,
+                            );
+                        }
                     }
 
                     if !has_active_floats {
