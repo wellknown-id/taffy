@@ -19,10 +19,10 @@ use placement::place_grid_items;
 use track_sizing::{
     determine_if_item_crosses_flexible_or_intrinsic_tracks, resolve_item_track_indexes, track_sizing_algorithm,
 };
-use types::{CellOccupancyMatrix, GridTrack, NamedLineResolver, TrackCounts};
+use types::{CellOccupancyMatrix, GridTrack, GridTrackKind, NamedLineResolver, TrackCounts};
 
 #[cfg(feature = "detailed_layout_info")]
-use types::{GridItem, GridTrackKind};
+use types::GridItem;
 
 pub(crate) use types::{GridCoordinate, GridLine, OriginZeroLine};
 
@@ -355,8 +355,9 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
 
     // 7. Resolve percentage track base sizes
     // In the case of an indefinitely sized container these resolve to zero during the "Initialise Tracks" step
-    // and therefore need to be re-resolved here based on the content-sized content box of the container
-    if !available_grid_space.width.is_definite() {
+    // and therefore need to be re-resolved here based on the content-sized content box of the container.
+    // This also applies to percentage gutters (gap) which need the container's final content size.
+    {
         let pre_sum: f32 = columns.iter().map(|t| t.base_size).sum();
         for column in &mut columns {
             let min: Option<f32> = column
@@ -377,7 +378,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
             }
         }
     }
-    if !available_grid_space.height.is_definite() {
+    {
         let pre_sum: f32 = rows.iter().map(|t| t.base_size).sum();
         for row in &mut rows {
             let min: Option<f32> = row
