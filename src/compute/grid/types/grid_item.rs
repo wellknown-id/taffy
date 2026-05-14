@@ -382,6 +382,7 @@ impl GridItem {
         inner_node_size: Size<Option<f32>>,
     ) -> f32 {
         let known_dimensions = self.known_dimensions(tree, inner_node_size, available_space);
+        eprintln!("GRID: min_content_contribution: axis={:?} known={:?} available={:?} inner={:?}", axis, known_dimensions, available_space, inner_node_size);
         // During intrinsic measurement, set parent_size to indefinite for the measured axis
         // so that percentage-based size properties resolve as auto, but keep the other axis
         // definite so that percentage padding/margin/border still resolve correctly.
@@ -389,7 +390,7 @@ impl GridItem {
             width: if axis == AbstractAxis::Inline { None } else { inner_node_size.width },
             height: if axis == AbstractAxis::Block { None } else { inner_node_size.height },
         };
-        tree.measure_child_size(
+        let result = tree.measure_child_size(
             self.node,
             known_dimensions,
             intrinsic_parent_size,
@@ -400,7 +401,9 @@ impl GridItem {
             SizingMode::InherentSize,
             axis.as_abs_naive(),
             Line::FALSE,
-        )
+        );
+        eprintln!("GRID: min_content_contribution result: {} (node={:?})", result, self.node);
+        result
     }
 
     /// Retrieve the item's min content contribution from the cache or compute it using the provided parameters
