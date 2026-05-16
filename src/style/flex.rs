@@ -103,6 +103,10 @@ pub enum FlexWrap {
     Wrap,
     /// Items will wrap in the opposite direction to this item's [`FlexDirection`]
     WrapReverse,
+    /// Items will wrap with balanced distribution across lines
+    Balance,
+    /// Items will wrap in reverse direction with balanced distribution
+    WrapReverseBalance,
 }
 
 #[cfg(feature = "parse")]
@@ -110,6 +114,8 @@ crate::util::parse::impl_parse_for_keyword_enum!(FlexWrap,
     "nowrap" => NoWrap,
     "wrap" => Wrap,
     "wrap-reverse" => WrapReverse,
+    "balance" => Balance,
+    "wrap-reverse-balance" => WrapReverseBalance,
 );
 
 /// The direction of the flexbox layout main axis.

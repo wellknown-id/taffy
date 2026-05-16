@@ -141,6 +141,8 @@ struct AlgoConstants {
     is_wrap: bool,
     /// Is the wrap direction inverted
     is_wrap_reverse: bool,
+    /// Is balanced wrapping enabled
+    is_balance: bool,
 
     /// The item's min_size style
     min_size: Size<Option<f32>>,
@@ -444,8 +446,9 @@ fn compute_constants(
     let dir = style.flex_direction();
     let is_row = dir.is_row();
     let is_column = dir.is_column();
-    let is_wrap = matches!(style.flex_wrap(), FlexWrap::Wrap | FlexWrap::WrapReverse);
-    let is_wrap_reverse = style.flex_wrap() == FlexWrap::WrapReverse;
+    let is_wrap = matches!(style.flex_wrap(), FlexWrap::Wrap | FlexWrap::WrapReverse | FlexWrap::Balance | FlexWrap::WrapReverseBalance);
+    let is_wrap_reverse = matches!(style.flex_wrap(), FlexWrap::WrapReverse | FlexWrap::WrapReverseBalance);
+    let is_balance = matches!(style.flex_wrap(), FlexWrap::Balance | FlexWrap::WrapReverseBalance);
 
     let aspect_ratio = style.aspect_ratio();
     let margin = style.margin().resolve_or_zero(parent_size.width, |val, basis| tree.calc(val, basis));
@@ -492,6 +495,7 @@ fn compute_constants(
         is_column,
         is_wrap,
         is_wrap_reverse,
+        is_balance,
         min_size: style
             .min_size()
             .maybe_resolve(parent_size, |val, basis| tree.calc(val, basis))
@@ -965,28 +969,64 @@ fn collect_flex_lines<'a>(
                 lines
             }
             AvailableSpace::Definite(main_axis_available_space) => {
-                let mut lines = new_vec_with_capacity(1);
                 let mut flex_items = &mut flex_items[..];
                 let main_axis_gap = constants.gap.main(constants.dir);
+                let is_balance = constants.is_balance;
 
-                while !flex_items.is_empty() {
-                    // Find index of the first item in the next line
-                    // (or the last item if all remaining items are in the current line)
+                // First pass: greedily count items per line
+                let mut greedy_counts: Vec<usize> = Vec::new();
+                let mut remaining = &flex_items[..];
+                while !remaining.is_empty() {
                     let mut line_length = 0.0;
-                    let index = flex_items
+                    let index = remaining
                         .iter()
                         .enumerate()
                         .find(|&(idx, child)| {
-                            // Gaps only occur between items (not before the first one or after the last one)
-                            // So first item in the line does not contribute a gap to the line length
                             let gap_contribution = if idx == 0 { 0.0 } else { main_axis_gap };
                             line_length += child.hypothetical_outer_size.main(constants.dir) + gap_contribution;
                             line_length > main_axis_available_space && idx != 0
                         })
                         .map(|(idx, _)| idx)
-                        .unwrap_or(flex_items.len());
+                        .unwrap_or(remaining.len());
+                    greedy_counts.push(index);
+                    remaining = &remaining[index..];
+                }
 
-                    let (items, rest) = flex_items.split_at_mut(index);
+                // Determine final line distribution
+                let counts: Vec<usize> = if is_balance && greedy_counts.len() > 1 {
+                    let total = flex_items.len();
+                    let num_lines = greedy_counts.len();
+                    let base = total / num_lines;
+                    let rem = total % num_lines;
+                    let mut balanced = Vec::with_capacity(num_lines);
+                    for i in 0..num_lines {
+                        balanced.push(if i < rem { base + 1 } else { base });
+                    }
+                    // Verify each balanced line fits; fall back to greedy if not
+                    let mut ok = true;
+                    let mut item_idx = 0;
+                    for &count in &balanced {
+                        let mut line_length = 0.0;
+                        for j in 0..count {
+                            let child = &flex_items[item_idx + j];
+                            let gap_contribution = if j == 0 { 0.0 } else { main_axis_gap };
+                            line_length += child.hypothetical_outer_size.main(constants.dir) + gap_contribution;
+                        }
+                        if line_length > main_axis_available_space {
+                            ok = false;
+                            break;
+                        }
+                        item_idx += count;
+                    }
+                    if ok { balanced } else { greedy_counts }
+                } else {
+                    greedy_counts
+                };
+
+                // Split items according to final distribution
+                let mut lines = new_vec_with_capacity(counts.len());
+                for &count in &counts {
+                    let (items, rest) = flex_items.split_at_mut(count);
                     lines.push(FlexLine { items, cross_size: 0.0, offset_cross: 0.0 });
                     flex_items = rest;
                 }
