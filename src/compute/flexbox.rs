@@ -994,29 +994,60 @@ fn collect_flex_lines<'a>(
 
                 // Determine final line distribution
                 let counts: Vec<usize> = if is_balance && greedy_counts.len() > 1 {
-                    let total = flex_items.len();
+                    let total_items = flex_items.len();
                     let num_lines = greedy_counts.len();
-                    let base = total / num_lines;
-                    let rem = total % num_lines;
+                    let sum_sizes: f32 = flex_items.iter()
+                        .map(|item| item.hypothetical_outer_size.main(constants.dir))
+                        .sum();
+                    let target = (sum_sizes + (total_items as f32 - num_lines as f32) * main_axis_gap) / num_lines as f32;
+
                     let mut balanced = Vec::with_capacity(num_lines);
-                    for i in 0..num_lines {
-                        balanced.push(if i < rem { base + 1 } else { base });
+                    let mut idx = 0;
+                    for line in 0..num_lines {
+                        let mut line_size = 0.0;
+                        let mut count = 0;
+                        let is_last = line == num_lines - 1;
+
+                        while idx + count < total_items {
+                            let child = &flex_items[idx + count];
+                            let gap = if count == 0 { 0.0 } else { main_axis_gap };
+                            let new_size = line_size + child.hypothetical_outer_size.main(constants.dir) + gap;
+
+                            if new_size > main_axis_available_space { break; }
+
+                            if is_last {
+                                count += 1; line_size = new_size; continue;
+                            }
+
+                            let should_add = if line_size >= target {
+                                (new_size - target).abs() < (line_size - target).abs()
+                            } else {
+                                (new_size - target).abs() <= (line_size - target).abs()
+                            };
+
+                            if should_add { count += 1; line_size = new_size; } else { break; }
+                        }
+
+                        if count == 0 { count = 1; }
+                        balanced.push(count);
+                        idx += count;
                     }
-                    // Verify each balanced line fits; fall back to greedy if not
+
                     let mut ok = true;
-                    let mut item_idx = 0;
-                    for &count in &balanced {
-                        let mut line_length = 0.0;
-                        for j in 0..count {
-                            let child = &flex_items[item_idx + j];
-                            let gap_contribution = if j == 0 { 0.0 } else { main_axis_gap };
-                            line_length += child.hypothetical_outer_size.main(constants.dir) + gap_contribution;
+                    if idx != total_items || balanced.len() != num_lines {
+                        ok = false;
+                    } else {
+                        let mut verify_idx = 0;
+                        for &count in &balanced {
+                            let mut ll = 0.0;
+                            for j in 0..count {
+                                let child = &flex_items[verify_idx + j];
+                                let g = if j == 0 { 0.0 } else { main_axis_gap };
+                                ll += child.hypothetical_outer_size.main(constants.dir) + g;
+                            }
+                            if ll > main_axis_available_space { ok = false; break; }
+                            verify_idx += count;
                         }
-                        if line_length > main_axis_available_space {
-                            ok = false;
-                            break;
-                        }
-                        item_idx += count;
                     }
                     if ok { balanced } else { greedy_counts }
                 } else {
