@@ -131,16 +131,23 @@ impl Cache {
                 for entry in self.measure_entries.iter().flatten() {
                     let cached_size = entry.content;
 
-                    if (known_dimensions.width == entry.known_dimensions.width
-                        || known_dimensions.width == Some(cached_size.width))
-                        && (known_dimensions.height == entry.known_dimensions.height
-                            || known_dimensions.height == Some(cached_size.height))
-                        && (known_dimensions.width.is_some()
-                            || entry.available_space.width.is_roughly_equal(available_space.width))
-                        && (known_dimensions.height.is_some()
-                            || entry.available_space.height.is_roughly_equal(available_space.height))
+                    // The known_dimensions must match exactly (not just by cached size coincidence).
+                    // Loose matching (e.g., known_dimensions.width == Some(cached_size.width)) 
+                    // can cause cache contamination when the cached height was computed with
+                    // a different parent_size than the one that would be used with the new 
+                    // known_dimensions configuration (e.g. during grid track sizing where
+                    // the non-measured axis parent_size differs from the actual grid area size).
+                    if known_dimensions.width != entry.known_dimensions.width { continue; }
+                    if known_dimensions.height != entry.known_dimensions.height { continue; }
+
+                    if known_dimensions.width.is_some()
+                        || entry.available_space.width.is_roughly_equal(available_space.width)
                     {
-                        return Some(LayoutOutput::from_outer_size(cached_size));
+                        if known_dimensions.height.is_some()
+                            || entry.available_space.height.is_roughly_equal(available_space.height)
+                        {
+                            return Some(LayoutOutput::from_outer_size(cached_size));
+                        }
                     }
                 }
 

@@ -185,13 +185,11 @@ where
     // First we check if we have a cached result for the given input
     let cache_entry = tree.cache_get(node, &inputs);
     if let Some(cached_size_and_baselines) = cache_entry {
-        eprintln!("CACHE HIT: node={:?} known={:?} avail={:?} cached_size={:?}", node, inputs.known_dimensions, inputs.available_space, cached_size_and_baselines.size);
         debug_log_node!(inputs);
         debug_log!("RESULT (CACHED)", dbg:cached_size_and_baselines.size);
         debug_pop_node!();
         return cached_size_and_baselines;
     }
-    eprintln!("CACHE MISS: node={:?} known={:?} avail={:?} run_mode={:?}", node, inputs.known_dimensions, inputs.available_space, inputs.run_mode);
 
     debug_log_node!(inputs);
 

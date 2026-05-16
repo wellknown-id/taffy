@@ -314,7 +314,6 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         has_baseline_aligned_item,
     );
     let initial_column_sum = columns.iter().map(|track| track.base_size).sum::<f32>();
-    eprintln!("GRID: after column sizing: columns={:?}", columns.iter().map(|c| format!("{:.1}", c.base_size)).collect::<Vec<_>>());
     inner_node_size.width = inner_node_size.width.or_else(|| initial_column_sum.into());
 
     items.iter_mut().for_each(|item| item.available_space_cache = None);
@@ -344,7 +343,6 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     debug_log!(dbg: rows.iter().map(|track| track.base_size).collect::<Vec<_>>());
 
     // 6. Compute container size
-    eprintln!("GRID: container_border_box before resolution: known={:?} preferred={:?} initial_col_sum={} initial_row_sum={} columns={:?} rows={:?}", known_dimensions, preferred_size, initial_column_sum, initial_row_sum, columns.iter().map(|c| format!("{}:{}", c.base_size, c.growth_limit)).collect::<Vec<_>>(), rows.iter().map(|r| format!("{}:{}", r.base_size, r.growth_limit)).collect::<Vec<_>>());
     let resolved_style_size = known_dimensions.or(preferred_size);
     let container_border_box = Size {
         width: resolved_style_size
@@ -358,8 +356,6 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
             .maybe_clamp(min_size.height, max_size.height)
             .max(padding_border_size.height),
     };
-    eprintln!("GRID: container_border_box = {:?}", container_border_box);
-
     let container_content_box = Size {
         width: f32_max(0.0, container_border_box.width - content_box_inset.horizontal_axis_sum()),
         height: f32_max(0.0, container_border_box.height - content_box_inset.vertical_axis_sum()),
