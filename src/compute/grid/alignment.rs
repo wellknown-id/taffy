@@ -126,18 +126,28 @@ pub(super) fn align_and_position_item(
     // Stretch only applies when the preferred size (width/height) is auto.
     // Non-auto values like max-content, min-content, or fixed lengths suppress stretch.
     // See: https://www.w3.org/TR/css-grid-1/#grid-item-sizing
+    //
+    // If the child has a preferred aspect ratio and one axis is definite (not auto),
+    // the other axis should be computed from the aspect ratio rather than stretched.
+    // See: https://www.w3.org/TR/css-grid-1/#grid-item-sizing
+    let width_is_auto = style.size().width.is_auto();
+    let height_is_auto = style.size().height.is_auto();
     let align_vertical = align_self.or(container_alignment_styles.vertical).unwrap_or(AlignSelf::Stretch);
     let align_horizontal = justify_self.or(container_alignment_styles.horizontal).unwrap_or(AlignSelf::Stretch);
     let alignment_styles = InBothAbsAxis {
         horizontal: {
-            if align_horizontal == AlignSelf::Stretch && inherent_size.width.is_none() && !style.size().width.is_auto() {
+            if align_horizontal == AlignSelf::Stretch
+                && (!width_is_auto || (aspect_ratio.is_some() && width_is_auto && !height_is_auto))
+            {
                 AlignSelf::Start
             } else {
                 align_horizontal
             }
         },
         vertical: {
-            if align_vertical == AlignSelf::Stretch && inherent_size.height.is_none() && !style.size().height.is_auto() {
+            if align_vertical == AlignSelf::Stretch
+                && (!height_is_auto || (aspect_ratio.is_some() && height_is_auto && !width_is_auto))
+            {
                 AlignSelf::Start
             } else {
                 align_vertical
