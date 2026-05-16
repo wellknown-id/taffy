@@ -33,7 +33,7 @@ pub(super) fn align_tracks(
     // simply pass zero here. Grid layout is never reversed.
     let gap = 0.0;
     let layout_is_reversed = false;
-    let is_safe = false; // TODO: Implement safe alignment
+    let is_safe = false; // TODO: Implement safe alignment for grid (needs grid style plumbing)
     let track_alignment = apply_alignment_fallback(free_space, num_tracks, track_alignment_style, is_safe);
     let track_alignment = if axis_is_reversed { track_alignment.reversed() } else { track_alignment };
 

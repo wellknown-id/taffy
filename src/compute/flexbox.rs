@@ -159,8 +159,12 @@ struct AlgoConstants {
     align_items: AlignItems,
     /// The align_content property of this node
     align_content: AlignContent,
+    /// Whether align_content uses the safe overflow modifier
+    align_content_is_safe: bool,
     /// The justify_content property of this node
     justify_content: Option<JustifyContent>,
+    /// Whether justify_content uses the safe overflow modifier
+    justify_content_is_safe: bool,
 
     /// The border-box size of the node being laid out (if known)
     node_outer_size: Size<Option<f32>>,
@@ -449,7 +453,9 @@ fn compute_constants(
 
     let align_items = style.align_items().unwrap_or(AlignItems::Stretch);
     let align_content = style.align_content().unwrap_or(AlignContent::Stretch);
+    let align_content_is_safe = style.align_content_is_safe();
     let justify_content = style.justify_content();
+    let justify_content_is_safe = style.justify_content_is_safe();
     let layout_direction = style.direction();
 
     // Scrollbar gutters are reserved when the `overflow` property is set to `Overflow::Scroll`.
@@ -498,7 +504,9 @@ fn compute_constants(
         scrollbar_gutter,
         align_items,
         align_content,
+        align_content_is_safe,
         justify_content,
+        justify_content_is_safe,
         node_outer_size,
         node_inner_size,
         container_size,
@@ -1739,8 +1747,9 @@ fn distribute_remaining_free_space(flex_lines: &mut [FlexLine], constants: &Algo
         let num_items = line.items.len();
         let layout_reverse = constants.dir.is_reverse();
         let gap = constants.gap.main(constants.dir);
-        let is_safe = false; // TODO: Implement safe alignment
+        let is_safe = constants.justify_content_is_safe;
         let raw_justify_content_mode = constants.justify_content.unwrap_or(JustifyContent::FlexStart);
+
         let justify_content_mode = apply_alignment_fallback(free_space, num_items, raw_justify_content_mode, is_safe);
 
         let justify_item = |(i, child): (usize, &mut FlexItem)| {
@@ -1921,7 +1930,7 @@ fn align_flex_lines_per_align_content(flex_lines: &mut [FlexLine], constants: &A
     let gap = constants.gap.cross(constants.dir);
     let total_cross_axis_gap = sum_axis_gaps(gap, num_lines);
     let free_space = constants.inner_container_size.cross(constants.dir) - total_cross_size - total_cross_axis_gap;
-    let is_safe = false; // TODO: Implement safe alignment
+    let is_safe = constants.align_content_is_safe;
 
     let align_content_mode = apply_alignment_fallback(free_space, num_lines, constants.align_content, is_safe);
 

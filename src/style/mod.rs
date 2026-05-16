@@ -508,9 +508,15 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     /// How should content contained within this item be aligned in the cross/block axis
     #[cfg(any(feature = "flexbox", feature = "grid"))]
     pub align_content: Option<AlignContent>,
+    /// Whether align_content uses the `safe` overflow modifier
+    #[cfg(any(feature = "flexbox", feature = "grid"))]
+    pub align_content_is_safe: bool,
     /// How should content contained within this item be aligned in the main/inline axis
     #[cfg(any(feature = "flexbox", feature = "grid"))]
     pub justify_content: Option<JustifyContent>,
+    /// Whether justify_content uses the `safe` overflow modifier
+    #[cfg(any(feature = "flexbox", feature = "grid"))]
+    pub justify_content_is_safe: bool,
     /// How large should the gaps between items in a grid or flex container be?
     #[cfg(any(feature = "flexbox", feature = "grid"))]
     #[cfg_attr(feature = "serde", serde(default = "style_helpers::zero"))]
@@ -619,7 +625,11 @@ impl<S: CheapCloneStr> Style<S> {
         #[cfg(any(feature = "flexbox", feature = "grid"))]
         align_content: None,
         #[cfg(any(feature = "flexbox", feature = "grid"))]
+        align_content_is_safe: false,
+        #[cfg(any(feature = "flexbox", feature = "grid"))]
         justify_content: None,
+        #[cfg(any(feature = "flexbox", feature = "grid"))]
+        justify_content_is_safe: false,
         // Block
         #[cfg(feature = "block_layout")]
         text_align: TextAlign::Auto,
@@ -888,6 +898,14 @@ impl<S: CheapCloneStr> FlexboxContainerStyle for Style<S> {
     fn justify_content(&self) -> Option<JustifyContent> {
         self.justify_content
     }
+    #[inline(always)]
+    fn align_content_is_safe(&self) -> bool {
+        self.align_content_is_safe
+    }
+    #[inline(always)]
+    fn justify_content_is_safe(&self) -> bool {
+        self.justify_content_is_safe
+    }
 }
 
 #[cfg(feature = "flexbox")]
@@ -915,6 +933,14 @@ impl<T: FlexboxContainerStyle> FlexboxContainerStyle for &'_ T {
     #[inline(always)]
     fn justify_content(&self) -> Option<JustifyContent> {
         (*self).justify_content()
+    }
+    #[inline(always)]
+    fn align_content_is_safe(&self) -> bool {
+        (*self).align_content_is_safe()
+    }
+    #[inline(always)]
+    fn justify_content_is_safe(&self) -> bool {
+        (*self).justify_content_is_safe()
     }
 }
 
