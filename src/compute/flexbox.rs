@@ -2401,48 +2401,51 @@ fn perform_absolute_layout_on_absolute_children(
         } else {
             // Stretch is an invalid value for justify_content in the flexbox algorithm, so we
             // treat it as if it wasn't set (and thus we default to FlexStart behaviour)
-            match (constants.justify_content.unwrap_or(JustifyContent::Start), main_axis_flex_start_reversed) {
-                (JustifyContent::SpaceBetween, _)
-                | (JustifyContent::Stretch, false)
-                | (JustifyContent::FlexStart, false)
-                | (JustifyContent::FlexEnd, true) => {
-                    constants.content_box_inset.main_start(constants.dir) + resolved_margin.main_start(constants.dir)
+            let main_start_pos =
+                constants.content_box_inset.main_start(constants.dir) + resolved_margin.main_start(constants.dir);
+            let main_end_pos = constants.container_size.main(constants.dir)
+                - constants.content_box_inset.main_end(constants.dir)
+                - final_size.main(constants.dir)
+                - resolved_margin.main_end(constants.dir);
+            let main_center_pos = (constants.container_size.main(constants.dir)
+                + constants.content_box_inset.main_start(constants.dir)
+                - constants.content_box_inset.main_end(constants.dir)
+                - final_size.main(constants.dir)
+                + resolved_margin.main_start(constants.dir)
+                - resolved_margin.main_end(constants.dir))
+                / 2.0;
+
+            // Physical alignment keywords (start/end) are affected by writing direction (RTL)
+            // but NOT by flex direction reversal. Flex-relative keywords (flex-start/flex-end)
+            // are affected by both.
+            // main_axis_flex_start_reversed = dir.is_reverse() ^ main_is_rtl
+            // main_is_rtl alone gives us the writing-direction-relative start.
+            let main_writing_mode_start = if main_is_rtl { main_end_pos } else { main_start_pos };
+            let main_writing_mode_end = if main_is_rtl { main_start_pos } else { main_end_pos };
+
+            match constants.justify_content.unwrap_or(JustifyContent::FlexStart) {
+                // Physical alignment keywords (absolute, not affected by flex direction)
+                JustifyContent::Start => main_writing_mode_start,
+                JustifyContent::End => main_writing_mode_end,
+                // Flex-relative alignment keywords (affected by flex direction reversal)
+                JustifyContent::FlexStart | JustifyContent::Stretch => {
+                    if main_axis_flex_start_reversed {
+                        main_end_pos
+                    } else {
+                        main_start_pos
+                    }
                 }
-                (JustifyContent::Start, false) => {
-                    constants.content_box_inset.main_start(constants.dir) + resolved_margin.main_start(constants.dir)
+                JustifyContent::FlexEnd => {
+                    if main_axis_flex_start_reversed {
+                        main_start_pos
+                    } else {
+                        main_end_pos
+                    }
                 }
-                (JustifyContent::Start, true) => {
-                    constants.container_size.main(constants.dir)
-                        - constants.content_box_inset.main_end(constants.dir)
-                        - final_size.main(constants.dir)
-                        - resolved_margin.main_end(constants.dir)
-                }
-                (JustifyContent::End, false) => {
-                    constants.container_size.main(constants.dir)
-                        - constants.content_box_inset.main_end(constants.dir)
-                        - final_size.main(constants.dir)
-                        - resolved_margin.main_end(constants.dir)
-                }
-                (JustifyContent::End, true) => {
-                    constants.content_box_inset.main_start(constants.dir) + resolved_margin.main_start(constants.dir)
-                }
-                (JustifyContent::FlexEnd, false)
-                | (JustifyContent::FlexStart, true)
-                | (JustifyContent::Stretch, true) => {
-                    constants.container_size.main(constants.dir)
-                        - constants.content_box_inset.main_end(constants.dir)
-                        - final_size.main(constants.dir)
-                        - resolved_margin.main_end(constants.dir)
-                }
-                (JustifyContent::SpaceEvenly, _) | (JustifyContent::SpaceAround, _) | (JustifyContent::Center, _) => {
-                    (constants.container_size.main(constants.dir)
-                        + constants.content_box_inset.main_start(constants.dir)
-                        - constants.content_box_inset.main_end(constants.dir)
-                        - final_size.main(constants.dir)
-                        + resolved_margin.main_start(constants.dir)
-                        - resolved_margin.main_end(constants.dir))
-                        / 2.0
-                }
+                JustifyContent::SpaceBetween
+                | JustifyContent::SpaceEvenly
+                | JustifyContent::SpaceAround
+                | JustifyContent::Center => main_center_pos,
             }
         };
 
@@ -2470,48 +2473,48 @@ fn perform_absolute_layout_on_absolute_children(
                     - resolved_margin.cross_end(constants.dir)
             }
         } else {
-            match (align_self, cross_axis_flex_start_reversed) {
-                // Stretch alignment does not apply to absolutely positioned items
-                // See "Example 3" at https://www.w3.org/TR/css-flexbox-1/#abspos-items
-                // Note: Stretch should be FlexStart not Start when we support both
-                (AlignSelf::Start, false) => {
-                    constants.content_box_inset.cross_start(constants.dir) + resolved_margin.cross_start(constants.dir)
+            // Stretch alignment does not apply to absolutely positioned items
+            // See "Example 3" at https://www.w3.org/TR/css-flexbox-1/#abspos-items
+            let cross_start_pos =
+                constants.content_box_inset.cross_start(constants.dir) + resolved_margin.cross_start(constants.dir);
+            let cross_end_pos = constants.container_size.cross(constants.dir)
+                - constants.content_box_inset.cross_end(constants.dir)
+                - final_size.cross(constants.dir)
+                - resolved_margin.cross_end(constants.dir);
+            let center_pos = (constants.container_size.cross(constants.dir)
+                + constants.content_box_inset.cross_start(constants.dir)
+                - constants.content_box_inset.cross_end(constants.dir)
+                - final_size.cross(constants.dir)
+                + resolved_margin.cross_start(constants.dir)
+                - resolved_margin.cross_end(constants.dir))
+                / 2.0;
+
+            // Physical alignment keywords (start/end) are affected by writing direction (RTL)
+            // but NOT by flex wrap-reverse. Flex-relative keywords (flex-start/flex-end)
+            // are affected by both.
+            // cross_axis_flex_start_reversed = is_wrap_reverse ^ cross_is_rtl
+            // cross_is_rtl alone gives us the writing-direction-relative start.
+            let cross_writing_mode_start = if cross_is_rtl { cross_end_pos } else { cross_start_pos };
+            let cross_writing_mode_end = if cross_is_rtl { cross_start_pos } else { cross_end_pos };
+
+            match align_self {
+                AlignSelf::Start | AlignSelf::Baseline => cross_writing_mode_start,
+                AlignSelf::End => cross_writing_mode_end,
+                AlignSelf::FlexStart | AlignSelf::Stretch => {
+                    if cross_axis_flex_start_reversed {
+                        cross_end_pos
+                    } else {
+                        cross_start_pos
+                    }
                 }
-                (AlignSelf::Start, true) => {
-                    constants.container_size.cross(constants.dir)
-                        - constants.content_box_inset.cross_end(constants.dir)
-                        - final_size.cross(constants.dir)
-                        - resolved_margin.cross_end(constants.dir)
+                AlignSelf::FlexEnd => {
+                    if cross_axis_flex_start_reversed {
+                        cross_start_pos
+                    } else {
+                        cross_end_pos
+                    }
                 }
-                (AlignSelf::End, false) => {
-                    constants.container_size.cross(constants.dir)
-                        - constants.content_box_inset.cross_end(constants.dir)
-                        - final_size.cross(constants.dir)
-                        - resolved_margin.cross_end(constants.dir)
-                }
-                (AlignSelf::End, true) => {
-                    constants.content_box_inset.cross_start(constants.dir) + resolved_margin.cross_start(constants.dir)
-                }
-                (AlignSelf::Baseline | AlignSelf::Stretch | AlignSelf::FlexStart, false)
-                | (AlignSelf::FlexEnd, true) => {
-                    constants.content_box_inset.cross_start(constants.dir) + resolved_margin.cross_start(constants.dir)
-                }
-                (AlignSelf::Baseline | AlignSelf::Stretch | AlignSelf::FlexStart, true)
-                | (AlignSelf::FlexEnd, false) => {
-                    constants.container_size.cross(constants.dir)
-                        - constants.content_box_inset.cross_end(constants.dir)
-                        - final_size.cross(constants.dir)
-                        - resolved_margin.cross_end(constants.dir)
-                }
-                (AlignSelf::Center, _) => {
-                    (constants.container_size.cross(constants.dir)
-                        + constants.content_box_inset.cross_start(constants.dir)
-                        - constants.content_box_inset.cross_end(constants.dir)
-                        - final_size.cross(constants.dir)
-                        + resolved_margin.cross_start(constants.dir)
-                        - resolved_margin.cross_end(constants.dir))
-                        / 2.0
-                }
+                AlignSelf::Center => center_pos,
             }
         };
 
