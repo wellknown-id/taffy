@@ -1089,7 +1089,7 @@ fn determine_container_main_size(
                             .iter()
                             .map(|child| {
                                 let padding_border_sum = (child.padding + child.border).main_axis_sum(constants.dir);
-                                (child.flex_basis.maybe_max(child.min_size.main(constants.dir))
+                                (child.flex_basis.max(child.resolved_minimum_main_size)
                                     + child.margin.main_axis_sum(constants.dir))
                                 .max(padding_border_sum)
                             })
@@ -1115,7 +1115,7 @@ fn determine_container_main_size(
                             .iter()
                             .map(|child| {
                                 let padding_border_sum = (child.padding + child.border).main_axis_sum(constants.dir);
-                                (child.flex_basis.maybe_max(child.min_size.main(constants.dir))
+                                (child.flex_basis.max(child.resolved_minimum_main_size)
                                     + child.margin.main_axis_sum(constants.dir))
                                 .max(padding_border_sum)
                             })
