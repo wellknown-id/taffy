@@ -36,6 +36,8 @@ struct FlexItem {
     max_size_ignoring_aspect_ratio: Size<Option<f32>>,
     /// The cross-alignment of this item
     align_self: AlignSelf,
+    /// Whether align-self uses the safe overflow modifier
+    align_self_is_safe: bool,
 
     /// Whether the item's cross size style is auto
     cross_size_is_auto: bool,
@@ -157,6 +159,8 @@ struct AlgoConstants {
     gap: Size<f32>,
     /// The align_items property of this node
     align_items: AlignItems,
+    /// Whether align_items uses the safe overflow modifier
+    align_items_is_safe: bool,
     /// The align_content property of this node
     align_content: AlignContent,
     /// Whether align_content uses the safe overflow modifier
@@ -452,6 +456,7 @@ fn compute_constants(
         if style.box_sizing() == BoxSizing::ContentBox { padding_border_sum } else { Size::ZERO };
 
     let align_items = style.align_items().unwrap_or(AlignItems::Stretch);
+    let align_items_is_safe = style.align_items_is_safe();
     let align_content = style.align_content().unwrap_or(AlignContent::Stretch);
     let align_content_is_safe = style.align_content_is_safe();
     let justify_content = style.justify_content();
@@ -503,6 +508,7 @@ fn compute_constants(
         content_box_inset,
         scrollbar_gutter,
         align_items,
+        align_items_is_safe,
         align_content,
         align_content_is_safe,
         justify_content,
@@ -574,6 +580,10 @@ fn generate_anonymous_flex_items(
                 padding,
                 border,
                 align_self: child_style.align_self().unwrap_or(constants.align_items),
+                align_self_is_safe: match child_style.align_self() {
+                    Some(_) => child_style.align_self_is_safe(),
+                    None => constants.align_items_is_safe,
+                },
                 cross_size_is_auto: child_style.size().cross(constants.dir).is_auto(),
                 main_size_is_percent_based: {
                     child_style.size().main(constants.dir).into_raw().uses_percentage()
@@ -1828,6 +1838,12 @@ fn align_flex_items_along_cross_axis(
     constants: &AlgoConstants,
 ) -> f32 {
     let cross_axis_should_reverse = constants.is_column && matches!(constants.layout_direction, Direction::Rtl);
+
+    // If free_space is negative and the safe overflow modifier is set,
+    // fall back to start alignment to prevent data loss
+    if free_space < 0.0 && child.align_self_is_safe {
+        return if cross_axis_should_reverse { free_space } else { 0.0 };
+    }
 
     match child.align_self {
         AlignSelf::Start => {

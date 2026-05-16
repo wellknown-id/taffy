@@ -962,6 +962,10 @@ impl<S: CheapCloneStr> FlexboxItemStyle for Style<S> {
     fn align_self(&self) -> Option<AlignSelf> {
         self.align_self
     }
+    #[inline(always)]
+    fn align_self_is_safe(&self) -> bool {
+        false // Style doesn't have align_self_is_safe field; this is tracked via FlexItem
+    }
 }
 
 #[cfg(feature = "flexbox")]

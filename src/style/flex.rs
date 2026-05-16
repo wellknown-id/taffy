@@ -48,6 +48,11 @@ pub trait FlexboxContainerStyle: CoreStyle {
     fn justify_content_is_safe(&self) -> bool {
         Style::<Self::CustomIdent>::DEFAULT.justify_content_is_safe
     }
+    /// Whether align-items uses the safe overflow modifier
+    #[inline(always)]
+    fn align_items_is_safe(&self) -> bool {
+        false
+    }
 }
 
 /// The set of styles required for a Flexbox item (child of a Flexbox container)
@@ -73,6 +78,11 @@ pub trait FlexboxItemStyle: CoreStyle {
     #[inline(always)]
     fn align_self(&self) -> Option<AlignSelf> {
         Style::<Self::CustomIdent>::DEFAULT.align_self
+    }
+    /// Whether align-self uses the safe overflow modifier
+    #[inline(always)]
+    fn align_self_is_safe(&self) -> bool {
+        false
     }
 }
 
