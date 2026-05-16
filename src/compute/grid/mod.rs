@@ -129,6 +129,19 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         width: outer_node_size.width.map(|space| space - content_box_inset.horizontal_axis_sum()),
         height: outer_node_size.height.map(|space| space - content_box_inset.vertical_axis_sum()),
     };
+    // When the container has a min-size but no explicit size, the min-size constraint
+    // still provides a definite inner size for track expansion steps (stretch, maximise, flex).
+    // Without this, tracks won't expand into the min-size-constrained space.
+    if inner_node_size.width.is_none() {
+        inner_node_size.width = min_size
+            .width
+            .map(|min| (min - content_box_inset.horizontal_axis_sum()).max(0.0));
+    }
+    if inner_node_size.height.is_none() {
+        inner_node_size.height = min_size
+            .height
+            .map(|min| (min - content_box_inset.vertical_axis_sum()).max(0.0));
+    }
 
     debug_log!("parent_size", dbg:parent_size);
     debug_log!("outer_node_size", dbg:outer_node_size);
