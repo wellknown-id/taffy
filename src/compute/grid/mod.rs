@@ -96,7 +96,9 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     };
 
     let align_content = style.align_content().unwrap_or(AlignContent::Stretch);
+    let align_content_is_safe = style.align_content_is_safe();
     let justify_content = style.justify_content().unwrap_or(JustifyContent::Stretch);
+    let justify_content_is_safe = style.justify_content_is_safe();
     let align_items = style.align_items();
     let justify_items = style.justify_items();
 
@@ -550,6 +552,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         &mut columns,
         justify_content,
         direction.is_rtl(),
+        justify_content_is_safe,
     );
     // Align rows
     align_tracks(
@@ -559,6 +562,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         &mut rows,
         align_content,
         false,
+        align_content_is_safe,
     );
 
     // 9. Size, Align, and Position Grid Items

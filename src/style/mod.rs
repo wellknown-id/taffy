@@ -1052,6 +1052,14 @@ impl<S: CheapCloneStr> GridContainerStyle for Style<S> {
         self.justify_content
     }
     #[inline(always)]
+    fn align_content_is_safe(&self) -> bool {
+        self.align_content_is_safe
+    }
+    #[inline(always)]
+    fn justify_content_is_safe(&self) -> bool {
+        self.justify_content_is_safe
+    }
+    #[inline(always)]
     fn align_items(&self) -> Option<AlignItems> {
         self.align_items
     }
@@ -1154,6 +1162,14 @@ impl<T: GridContainerStyle> GridContainerStyle for &'_ T {
     #[inline(always)]
     fn justify_content(&self) -> Option<JustifyContent> {
         (*self).justify_content()
+    }
+    #[inline(always)]
+    fn align_content_is_safe(&self) -> bool {
+        (*self).align_content_is_safe()
+    }
+    #[inline(always)]
+    fn justify_content_is_safe(&self) -> bool {
+        (*self).justify_content_is_safe()
     }
     #[inline(always)]
     fn align_items(&self) -> Option<AlignItems> {

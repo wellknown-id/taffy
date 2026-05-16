@@ -205,6 +205,16 @@ pub trait GridContainerStyle: CoreStyle {
     fn justify_content(&self) -> Option<JustifyContent> {
         Style::<Self::CustomIdent>::DEFAULT.justify_content
     }
+    /// Whether align-content uses the safe overflow modifier
+    #[inline(always)]
+    fn align_content_is_safe(&self) -> bool {
+        false
+    }
+    /// Whether justify-content uses the safe overflow modifier
+    #[inline(always)]
+    fn justify_content_is_safe(&self) -> bool {
+        false
+    }
     /// How this node's children aligned in the cross/block axis?
     #[inline(always)]
     fn align_items(&self) -> Option<AlignItems> {
