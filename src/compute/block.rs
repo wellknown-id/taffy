@@ -443,7 +443,13 @@ fn compute_inner(
     let resolved_padding = raw_padding.resolve_or_zero(Some(container_outer_width), |val, basis| tree.calc(val, basis));
     let resolved_border = raw_border.resolve_or_zero(Some(container_outer_width), |val, basis| tree.calc(val, basis));
     let resolved_content_box_inset = resolved_padding + resolved_border + scrollbar_gutter;
-    let (inflow_content_size, mut intrinsic_outer_height, first_child_top_margin_set, last_child_bottom_margin_set) =
+    let (
+        inflow_content_size,
+        mut intrinsic_outer_height,
+        first_baseline,
+        first_child_top_margin_set,
+        last_child_bottom_margin_set,
+    ) =
         perform_final_layout_on_in_flow_children(
             tree,
             &mut items,
@@ -518,7 +524,10 @@ fn compute_inner(
         size: final_outer_size,
         #[cfg(feature = "content_size")]
         content_size,
-        first_baselines: Point::NONE,
+        first_baselines: Point {
+            x: None,
+            y: first_baseline,
+        },
         top_margin: if own_margins_collapse_with_children.start {
             first_child_top_margin_set
         } else {
@@ -700,7 +709,7 @@ fn perform_final_layout_on_in_flow_children(
     direction: Direction,
     own_margins_collapse_with_children: Line<bool>,
     block_ctx: &mut BlockContext<'_>,
-) -> (Size<f32>, f32, CollapsibleMarginSet, CollapsibleMarginSet) {
+) -> (Size<f32>, f32, Option<f32>, CollapsibleMarginSet, CollapsibleMarginSet) {
     // Resolve container_inner_width for sizing child nodes using initial content_box_inset
     let container_inner_width = container_outer_width - resolved_content_box_inset.horizontal_axis_sum();
     let container_percentage_resolution_height =
@@ -720,6 +729,7 @@ fn perform_final_layout_on_in_flow_children(
     let mut inflow_content_size = Size::ZERO;
     let mut committed_y_offset = resolved_content_box_inset.top;
     let mut y_offset_for_absolute = resolved_content_box_inset.top;
+    let mut first_baseline = None;
     let mut first_child_top_margin_set = CollapsibleMarginSet::ZERO;
     let mut active_collapsible_margin_set = CollapsibleMarginSet::ZERO;
     let mut is_collapsing_with_first_margin_set = true;
@@ -1076,6 +1086,10 @@ fn perform_final_layout_on_in_flow_children(
                 },
             );
 
+            if first_baseline.is_none() {
+                first_baseline = Some(location.y + item_layout.first_baselines.y.unwrap_or(item_layout.size.height));
+            }
+
             #[cfg(feature = "content_size")]
             {
                 inflow_content_size = inflow_content_size.f32_max(compute_content_size_contribution(
@@ -1126,7 +1140,7 @@ fn perform_final_layout_on_in_flow_children(
 
     committed_y_offset += resolved_content_box_inset.bottom + bottom_y_margin_offset;
     let content_height = f32_max(0.0, committed_y_offset);
-    (inflow_content_size, content_height, first_child_top_margin_set, last_child_bottom_margin_set)
+    (inflow_content_size, content_height, first_baseline, first_child_top_margin_set, last_child_bottom_margin_set)
 }
 
 /// Perform absolute layout on all absolutely positioned children.

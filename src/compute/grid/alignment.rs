@@ -350,8 +350,14 @@ pub(super) fn align_item_within_area(
 
     // Compute offset in the axis
     let alignment_based_offset = match alignment_style {
-        // TODO: Add support for baseline alignment. For now we treat it as "start".
-        AlignSelf::Start | AlignSelf::FlexStart | AlignSelf::Baseline | AlignSelf::Stretch => {
+        AlignSelf::Baseline => {
+            if direction.is_rtl() {
+                grid_area_size - resolved_size - resolved_margin.end
+            } else {
+                margin.start.unwrap_or(0.0) + baseline_shim
+            }
+        }
+        AlignSelf::Start | AlignSelf::FlexStart | AlignSelf::Stretch => {
             if direction.is_rtl() {
                 grid_area_size - resolved_size - resolved_margin.end
             } else {
