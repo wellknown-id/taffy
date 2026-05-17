@@ -366,6 +366,10 @@ pub enum Overflow {
     /// for a scrollbar. The amount of space reserved is controlled by the `scrollbar_width` property.
     /// Content that overflows this node should *not* contribute to the scroll region of its parent.
     Scroll,
+    /// The automatic minimum size of this node as a flexbox/grid item should be `0`. Space should be reserved
+    /// for a scrollbar only when content actually overflows (scrollbar gutter behavior depends on the UA).
+    /// Content that overflows this node should *not* contribute to the scroll region of its parent.
+    Auto,
 }
 
 impl Overflow {
@@ -375,7 +379,7 @@ impl Overflow {
     pub fn is_scroll_container(self) -> bool {
         match self {
             Self::Visible | Self::Clip => false,
-            Self::Hidden | Self::Scroll => true,
+            Self::Hidden | Self::Scroll | Self::Auto => true,
         }
     }
 
@@ -396,6 +400,7 @@ crate::util::parse::impl_parse_for_keyword_enum!(Overflow,
     "hidden" => Hidden,
     "clip" => Clip,
     "scroll" => Scroll,
+    "auto" => Auto,
 );
 
 /// Sets the direction of text, table and grid columns, and horizontal overflow.
