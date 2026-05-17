@@ -225,7 +225,7 @@ impl<NodeContext> PrintTree for TaffyTree<NodeContext> {
             #[cfg(feature = "block_layout")]
             (_, Display::Block) => "BLOCK",
             #[cfg(feature = "flexbox")]
-            (_, Display::Flex) => {
+            (_, Display::Flex) | (_, Display::InlineFlex) => {
                 use crate::FlexDirection;
                 match node.style.flex_direction {
                     FlexDirection::Row | FlexDirection::RowReverse => "FLEX ROW",
@@ -233,7 +233,7 @@ impl<NodeContext> PrintTree for TaffyTree<NodeContext> {
                 }
             }
             #[cfg(feature = "grid")]
-            (_, Display::Grid) => "GRID",
+            (_, Display::Grid) | (_, Display::InlineGrid) => "GRID",
         }
     }
 
@@ -296,9 +296,9 @@ where
                 #[cfg(feature = "block_layout")]
                 (Display::Block, true) => compute_block_layout(tree, node_id, inputs, block_ctx),
                 #[cfg(feature = "flexbox")]
-                (Display::Flex, true) => compute_flexbox_layout(tree, node_id, inputs),
+                (Display::Flex, true) | (Display::InlineFlex, true) => compute_flexbox_layout(tree, node_id, inputs),
                 #[cfg(feature = "grid")]
-                (Display::Grid, true) => compute_grid_layout(tree, node_id, inputs),
+                (Display::Grid, true) | (Display::InlineGrid, true) => compute_grid_layout(tree, node_id, inputs),
                 (_, false) => {
                     let node_key = node_id.into();
                     let style = &tree.taffy.nodes[node_key].style;

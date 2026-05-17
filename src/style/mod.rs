@@ -188,6 +188,12 @@ pub enum Display {
     /// The children will follow the CSS Grid layout algorithm
     #[cfg(feature = "grid")]
     Grid,
+    /// Inline-level flexbox — children follow flexbox layout but box is inline-level
+    #[cfg(feature = "flexbox")]
+    InlineFlex,
+    /// Inline-level grid — children follow grid layout but box is inline-level
+    #[cfg(feature = "grid")]
+    InlineGrid,
     /// The node is hidden, and it's children will also be hidden
     None,
 }
@@ -221,8 +227,12 @@ crate::util::parse::impl_parse_for_keyword_enum!(Display,
     "none" => None,
     #[cfg(feature = "flexbox")]
     "flex" => Flex,
+    #[cfg(feature = "flexbox")]
+    "inline-flex" => InlineFlex,
     #[cfg(feature = "grid")]
     "grid" => Grid,
+    #[cfg(feature = "grid")]
+    "inline-grid" => InlineGrid,
     #[cfg(feature = "block_layout")]
     "block" => Block,
 );
@@ -235,8 +245,12 @@ impl core::fmt::Display for Display {
             Display::Block => write!(f, "BLOCK"),
             #[cfg(feature = "flexbox")]
             Display::Flex => write!(f, "FLEX"),
+            #[cfg(feature = "flexbox")]
+            Display::InlineFlex => write!(f, "INLINE FLEX"),
             #[cfg(feature = "grid")]
             Display::Grid => write!(f, "GRID"),
+            #[cfg(feature = "grid")]
+            Display::InlineGrid => write!(f, "INLINE GRID"),
         }
     }
 }
