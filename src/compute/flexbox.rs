@@ -426,10 +426,7 @@ fn compute_preliminary(tree: &mut impl LayoutFlexboxContainer, node: NodeId, inp
             .iter()
             .find(|item| constants.is_column || item.align_self == AlignSelf::Baseline)
             .or_else(|| flex_lines[0].items.iter().next())
-            .map(|child| {
-                let offset_vertical = if constants.is_row { child.offset_cross } else { child.offset_main };
-                offset_vertical + child.baseline
-            })
+            .map(|child| child.baseline)
     };
 
     LayoutOutput::from_sizes_and_baselines(
