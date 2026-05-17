@@ -34,6 +34,14 @@ mod track_sizing;
 mod types;
 mod util;
 
+#[inline]
+fn items_crossing_intrinsic_track(
+    items: &mut [types::GridItem],
+    axis: AbstractAxis,
+) -> impl Iterator<Item = &mut types::GridItem> {
+    items.iter_mut().filter(move |item| item.crosses_intrinsic_track(axis))
+}
+
 /// Grid layout algorithm
 /// This consists of a few phases:
 ///   - Resolving the explicit grid
@@ -428,8 +436,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     rerun_column_sizing = parent_width_indefinite && has_percentage_column;
 
     if !rerun_column_sizing {
-        let min_content_contribution_changed =
-            items.iter_mut().filter(|item| item.crosses_intrinsic_column).any(|item| {
+        let min_content_contribution_changed = items_crossing_intrinsic_track(&mut items, AbstractAxis::Inline).any(|item| {
                 let available_space = item.available_space(
                     AbstractAxis::Inline,
                     &rows,
@@ -488,8 +495,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         rerun_row_sizing = parent_height_indefinite && has_percentage_row;
 
         if !rerun_row_sizing {
-            let min_content_contribution_changed =
-                items.iter_mut().filter(|item| item.crosses_intrinsic_column).any(|item| {
+            let min_content_contribution_changed = items_crossing_intrinsic_track(&mut items, AbstractAxis::Block).any(|item| {
                     let available_space = item.available_space(
                         AbstractAxis::Block,
                         &columns,
@@ -742,6 +748,80 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         item_content_size_contribution,
         Point { x: None, y: Some(grid_container_baseline) },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::{Line, Point, Rect, Size};
+    use crate::style::{AlignSelf, Dimension, LengthPercentage, LengthPercentageAuto, Overflow};
+    use crate::{BoxSizing, NodeId};
+
+    fn dummy_grid_item() -> types::GridItem {
+        types::GridItem {
+            node: NodeId::from(0usize),
+            source_order: 0,
+            row: Line { start: OriginZeroLine(0), end: OriginZeroLine(1) },
+            column: Line { start: OriginZeroLine(0), end: OriginZeroLine(1) },
+            is_compressible_replaced: false,
+            overflow: Point { x: Overflow::Visible, y: Overflow::Visible },
+            box_sizing: BoxSizing::BorderBox,
+            size: Size { width: Dimension::AUTO, height: Dimension::AUTO },
+            min_size: Size { width: Dimension::AUTO, height: Dimension::AUTO },
+            max_size: Size { width: Dimension::AUTO, height: Dimension::AUTO },
+            aspect_ratio: None,
+            padding: Rect {
+                left: LengthPercentage::ZERO,
+                right: LengthPercentage::ZERO,
+                top: LengthPercentage::ZERO,
+                bottom: LengthPercentage::ZERO,
+            },
+            border: Rect {
+                left: LengthPercentage::ZERO,
+                right: LengthPercentage::ZERO,
+                top: LengthPercentage::ZERO,
+                bottom: LengthPercentage::ZERO,
+            },
+            margin: Rect {
+                left: LengthPercentageAuto::ZERO,
+                right: LengthPercentageAuto::ZERO,
+                top: LengthPercentageAuto::ZERO,
+                bottom: LengthPercentageAuto::ZERO,
+            },
+            align_self: AlignSelf::Start,
+            justify_self: AlignSelf::Start,
+            baseline: None,
+            baseline_shim: 0.0,
+            row_indexes: Line { start: 0, end: 1 },
+            column_indexes: Line { start: 0, end: 1 },
+            crosses_flexible_row: false,
+            crosses_flexible_column: false,
+            crosses_intrinsic_row: false,
+            crosses_intrinsic_column: false,
+            available_space_cache: None,
+            min_content_contribution_cache: Size::NONE,
+            minimum_contribution_cache: Size::NONE,
+            max_content_contribution_cache: Size::NONE,
+            y_position: 0.0,
+            height: 0.0,
+        }
+    }
+
+    #[test]
+    fn intrinsic_track_filter_uses_axis_specific_flags() {
+        let mut row_item = dummy_grid_item();
+        row_item.crosses_intrinsic_row = true;
+
+        let mut column_item = dummy_grid_item();
+        column_item.crosses_intrinsic_column = true;
+
+        let mut items = vec![row_item, column_item];
+
+        assert_eq!(items_crossing_intrinsic_track(&mut items, AbstractAxis::Inline).count(), 1);
+        assert_eq!(items_crossing_intrinsic_track(&mut items, AbstractAxis::Block).count(), 1);
+        assert!(items_crossing_intrinsic_track(&mut items[..1], AbstractAxis::Block).next().is_some());
+        assert!(items_crossing_intrinsic_track(&mut items[..1], AbstractAxis::Inline).next().is_none());
+    }
 }
 
 /// Reverses only non-gutter column tracks in-place while preserving line/gutter slots.
