@@ -421,3 +421,36 @@ fn relayout_is_stable_with_rounding() {
         assert_eq!(initial_inner_layout.size.height, inner_layout.size.height);
     }
 }
+
+#[test]
+fn abspos_flex_justify_content_space_between_falls_back_to_start() {
+    let mut taffy = new_test_tree();
+
+    let abspos = taffy
+        .new_leaf(Style {
+            position: Position::Absolute,
+            size: Size { width: length(8.0), height: length(6.0) },
+            ..Default::default()
+        })
+        .unwrap();
+    let flex = taffy
+        .new_with_children(
+            Style {
+                display: Display::Flex,
+                position: Position::Relative,
+                flex_direction: FlexDirection::Row,
+                justify_content: Some(JustifyContent::SpaceBetween),
+                size: Size { width: length(16.0), height: length(10.0) },
+                padding: Rect { left: length(2.0), right: length(2.0), top: length(1.0), bottom: length(1.0) },
+                ..Default::default()
+            },
+            &[abspos],
+        )
+        .unwrap();
+
+    taffy.compute_layout(flex, Size::MAX_CONTENT).unwrap();
+
+    let abspos_layout = taffy.layout(abspos).unwrap();
+    assert_eq!(abspos_layout.location.x, 2.0);
+    assert_eq!(abspos_layout.location.y, 1.0);
+}

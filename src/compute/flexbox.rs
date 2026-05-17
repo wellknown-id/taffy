@@ -2563,7 +2563,15 @@ fn perform_absolute_layout_on_absolute_children(
             let main_writing_mode_start = if main_is_rtl { main_end_pos } else { main_start_pos };
             let main_writing_mode_end = if main_is_rtl { main_start_pos } else { main_end_pos };
 
-            match constants.justify_content.unwrap_or(JustifyContent::FlexStart) {
+            let raw_justify_content_mode = constants.justify_content.unwrap_or(JustifyContent::FlexStart);
+            let justify_content_mode = apply_alignment_fallback(
+                free_space.main(constants.dir),
+                1,
+                raw_justify_content_mode,
+                constants.justify_content_is_safe,
+            );
+
+            match justify_content_mode {
                 // Physical alignment keywords (absolute, not affected by flex direction)
                 JustifyContent::Start => main_writing_mode_start,
                 JustifyContent::End => main_writing_mode_end,
