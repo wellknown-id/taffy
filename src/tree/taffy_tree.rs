@@ -922,7 +922,8 @@ impl<NodeContext> TaffyTree<NodeContext> {
 mod tests {
 
     use super::*;
-    use crate::style::{Dimension, Display, FlexDirection};
+    use crate::style::{Dimension, Display, FlexDirection, Position};
+    use crate::Rect;
     use crate::style_helpers::*;
     use crate::util::sys;
 
@@ -1058,6 +1059,39 @@ mod tests {
         taffy.set_node_context(node, Some(Size { width: 100.0, height: 100.0 })).unwrap();
         taffy.compute_layout_with_measure(node, Size::MAX_CONTENT, size_measure_function).unwrap();
         assert_eq!(taffy.layout(node).unwrap().size.width, 100.0);
+    }
+
+    #[test]
+    fn relative_block_top_percentage_uses_own_height() {
+        let mut taffy: TaffyTree<()> = TaffyTree::new();
+
+        let child = taffy
+            .new_leaf(Style {
+                position: Position::Relative,
+                inset: Rect {
+                    top: percent(-1.0),
+                    ..Rect::auto()
+                },
+                size: Size::from_lengths(100.0, 100.0),
+                ..Default::default()
+            })
+            .unwrap();
+
+        let parent = taffy
+            .new_with_children(
+                Style {
+                    display: Display::Block,
+                    size: Size::from_lengths(100.0, 100.0),
+                    ..Default::default()
+                },
+                &[child],
+            )
+            .unwrap();
+
+        taffy.compute_layout(parent, Size::MAX_CONTENT).unwrap();
+
+        let child_layout = taffy.layout(child).unwrap();
+        assert_eq!(child_layout.location.y, -100.0);
     }
 
     /// Test that adding `add_child()` works

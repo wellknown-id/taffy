@@ -1325,7 +1325,11 @@ mod tests {
             #[cfg(any(feature = "flexbox", feature = "grid"))]
             align_content: Default::default(),
             #[cfg(any(feature = "flexbox", feature = "grid"))]
+            align_content_is_safe: false,
+            #[cfg(any(feature = "flexbox", feature = "grid"))]
             justify_content: Default::default(),
+            #[cfg(any(feature = "flexbox", feature = "grid"))]
+            justify_content_is_safe: false,
             inset: Rect::auto(),
             margin: Rect::zero(),
             padding: Rect::zero(),

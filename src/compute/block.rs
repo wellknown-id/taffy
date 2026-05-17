@@ -963,9 +963,13 @@ fn perform_final_layout_on_in_flow_children(
             };
 
             // Resolve item inset
-            let inset = item.inset.zip_size(Size { width: container_inner_width, height: 0.0 }, |p, s| {
-                p.maybe_resolve(s, |val, basis| tree.calc(val, basis))
-            });
+            let inset = item.inset.zip_size(
+                Size {
+                    width: container_inner_width,
+                    height: final_size.height,
+                },
+                |p, s| p.maybe_resolve(s, |val, basis| tree.calc(val, basis)),
+            );
             let inset_offset = Point {
                 x: if direction.is_rtl() {
                     inset.right.map(|x| -x).or(inset.left).unwrap_or(0.0)
