@@ -211,10 +211,10 @@ struct BlockItem {
 
     /// The base size of this item
     size: Size<Option<f32>>,
-    /// Whether the width is from an intrinsic size keyword (min-content, max-content)
-    intrinsic_width: bool,
-    /// Whether the height is from an intrinsic size keyword (min-content, max-content)
-    intrinsic_height: bool,
+    /// The intrinsic sizing mode if the width is from an intrinsic size keyword (min-content, max-content)
+    intrinsic_width: Option<AvailableSpace>,
+    /// The intrinsic sizing mode if the height is from an intrinsic size keyword (min-content, max-content)
+    intrinsic_height: Option<AvailableSpace>,
     /// The minimum allowable size of this item
     min_size: Size<Option<f32>>,
     /// The maximum allowable size of this item
@@ -575,8 +575,20 @@ fn generate_item_list(
 
             let raw_size_width = child_style.size().width.into_raw();
             let raw_size_height = child_style.size().height.into_raw();
-            let intrinsic_width = raw_size_width.is_min_or_max_content();
-            let intrinsic_height = raw_size_height.is_min_or_max_content();
+            let intrinsic_width = if raw_size_width.is_min_content() {
+                Some(AvailableSpace::MinContent)
+            } else if raw_size_width.is_max_content() {
+                Some(AvailableSpace::MaxContent)
+            } else {
+                None
+            };
+            let intrinsic_height = if raw_size_height.is_min_content() {
+                Some(AvailableSpace::MinContent)
+            } else if raw_size_height.is_max_content() {
+                Some(AvailableSpace::MaxContent)
+            } else {
+                None
+            };
 
             BlockItem {
                 node_id: child_node_id,
@@ -743,12 +755,15 @@ fn perform_final_layout_on_in_flow_children(
             if let Some(float_direction) = item.float.float_direction() {
                 has_active_floats = true;
 
+                let float_available_space = Size {
+                    width: item.intrinsic_width.unwrap_or(AvailableSpace::MaxContent),
+                    height: item.intrinsic_height.unwrap_or(AvailableSpace::MaxContent),
+                };
                 let item_layout = tree.perform_child_layout(
                     item.node_id,
                     Size::NONE,
                     parent_size,
-                    // available_space,
-                    Size::MAX_CONTENT,
+                    float_available_space,
                     SizingMode::InherentSize,
                     Line::TRUE,
                 );
@@ -831,18 +846,15 @@ fn perform_final_layout_on_in_flow_children(
                         // check if they fit beside the float. If not, move below all
                         // floats (CSS 2.2 §9.5.2).
                         let fits_in_slot = if !item.is_block && item.clear == Clear::None {
-                            let el_width = item
-                                .size
-                                .width
-                                .unwrap_or(container_inner_width - item_non_auto_x_margin_sum);
+                            let el_width =
+                                item.size.width.unwrap_or(container_inner_width - item_non_auto_x_margin_sum);
                             el_width <= slot.width
                         } else {
                             true
                         };
 
                         if !fits_in_slot {
-                            let float_bottom =
-                                block_ctx.cleared_threshold(Clear::Both).unwrap_or(0.0);
+                            let float_bottom = block_ctx.cleared_threshold(Clear::Both).unwrap_or(0.0);
                             let y = min_y.max(float_bottom);
                             let stretch_width = container_inner_width - item_non_auto_x_margin_sum;
                             break 'block (
@@ -852,11 +864,7 @@ fn perform_final_layout_on_in_flow_children(
                             );
                         } else {
                             let stretch_width = slot.width - item_non_auto_x_margin_sum;
-                            break 'block (
-                                stretch_width,
-                                Point { x: slot.x, y: slot.y },
-                                slot.width,
-                            );
+                            break 'block (stretch_width, Point { x: slot.x, y: slot.y }, slot.width);
                         }
                     }
 
@@ -878,7 +886,7 @@ fn perform_final_layout_on_in_flow_children(
             } else {
                 item.size
                     .map_width(|width| {
-                        if !item.is_block && item.intrinsic_width {
+                        if !item.is_block && item.intrinsic_width.is_some() {
                             width
                         } else {
                             Some(width.unwrap_or(stretch_width).maybe_clamp(item.min_size.width, item.max_size.width))
