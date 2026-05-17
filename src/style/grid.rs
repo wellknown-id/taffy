@@ -220,10 +220,20 @@ pub trait GridContainerStyle: CoreStyle {
     fn align_items(&self) -> Option<AlignItems> {
         Style::<Self::CustomIdent>::DEFAULT.align_items
     }
+    /// Whether align-items uses the safe overflow modifier
+    #[inline(always)]
+    fn align_items_is_safe(&self) -> bool {
+        false
+    }
     /// How this node's children should be aligned in the inline axis
     #[inline(always)]
     fn justify_items(&self) -> Option<AlignItems> {
         Style::<Self::CustomIdent>::DEFAULT.justify_items
+    }
+    /// Whether justify-items uses the safe overflow modifier
+    #[inline(always)]
+    fn justify_items_is_safe(&self) -> bool {
+        false
     }
 
     /// Get a grid item's row or column placement depending on the axis passed
@@ -269,6 +279,16 @@ pub trait GridItemStyle: CoreStyle {
     #[inline(always)]
     fn justify_self(&self) -> Option<AlignSelf> {
         Style::<Self::CustomIdent>::DEFAULT.justify_self
+    }
+    /// Whether align-self uses the safe overflow modifier
+    #[inline(always)]
+    fn align_self_is_safe(&self) -> bool {
+        false
+    }
+    /// Whether justify-self uses the safe overflow modifier
+    #[inline(always)]
+    fn justify_self_is_safe(&self) -> bool {
+        false
     }
 
     /// Get a grid item's row or column placement depending on the axis passed

@@ -71,6 +71,8 @@ pub(super) fn align_and_position_item(
     container_alignment_styles: InBothAbsAxis<Option<AlignItems>>,
     baseline_shim: f32,
     direction: Direction,
+    container_align_items_is_safe: bool,
+    container_justify_items_is_safe: bool,
 ) -> (Size<f32>, f32, f32) {
     let grid_area_size = Size { width: grid_area.right - grid_area.left, height: grid_area.bottom - grid_area.top };
 
@@ -221,6 +223,18 @@ pub(super) fn align_and_position_item(
     // Clamp size by min and max width/height
     let Size { width, height } = Size { width, height }.maybe_clamp(min_size, max_size);
 
+    // Determine safe/unsafe overflow flags per axis before dropping style:
+    // - If the item has an explicit align-self/justify-self, its own safe flag applies
+    // - Otherwise, fall back to the container's align-items/justify-items safe flag
+    let align_self_is_safe_flag = match align_self {
+        Some(_) => style.align_self_is_safe(),
+        None => container_align_items_is_safe,
+    };
+    let justify_self_is_safe_flag = match justify_self {
+        Some(_) => style.justify_self_is_safe(),
+        None => container_justify_items_is_safe,
+    };
+
     // Layout node
     drop(style);
 
@@ -259,6 +273,7 @@ pub(super) fn align_and_position_item(
         margin.horizontal_components(),
         0.0,
         direction,
+        justify_self_is_safe_flag,
     );
     let (y, y_margin) = align_item_within_area(
         Line { start: grid_area.top, end: grid_area.bottom },
@@ -269,6 +284,7 @@ pub(super) fn align_and_position_item(
         margin.vertical_components(),
         baseline_shim,
         Direction::Ltr,
+        align_self_is_safe_flag,
     );
 
     let scrollbar_size = Size {
@@ -317,6 +333,7 @@ pub(super) fn align_item_within_area(
     margin: Line<Option<f32>>,
     baseline_shim: f32,
     direction: Direction,
+    is_safe: bool,
 ) -> (f32, Line<f32>) {
     // Calculate grid area dimension in the axis
     let non_auto_margin = Line { start: margin.start.unwrap_or(0.0) + baseline_shim, end: margin.end.unwrap_or(0.0) };
@@ -351,6 +368,19 @@ pub(super) fn align_item_within_area(
         AlignSelf::Center => (grid_area_size - resolved_size + resolved_margin.start - resolved_margin.end) / 2.0,
     };
 
+    // If the safe overflow modifier is set and the item would overflow the grid area
+    // (i.e., non-start alignment would cause the item to extend beyond the start or end edge),
+    // fall back to start alignment to prevent data loss.
+    let aligned_start = grid_area.start + alignment_based_offset;
+    let aligned_end = aligned_start + resolved_size + resolved_margin.end;
+    let overflow_start = aligned_start < grid_area.start;
+    let overflow_end = aligned_end > grid_area.end;
+    let safe_fallback_offset = if is_safe && (overflow_start || overflow_end) {
+        resolved_margin.start
+    } else {
+        alignment_based_offset
+    };
+
     let offset_within_area = if position == Position::Absolute {
         match (inset.start, inset.end) {
             (Some(start), Some(end)) => {
@@ -362,10 +392,10 @@ pub(super) fn align_item_within_area(
             }
             (Some(start), None) => start + non_auto_margin.start,
             (None, Some(end)) => grid_area_size - end - resolved_size - non_auto_margin.end,
-            (None, None) => alignment_based_offset,
+            (None, None) => safe_fallback_offset,
         }
     } else {
-        alignment_based_offset
+        safe_fallback_offset
     };
 
     let mut start = grid_area.start + offset_within_area;

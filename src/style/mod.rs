@@ -494,6 +494,9 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     /// How this node's children aligned in the cross/block axis?
     #[cfg(any(feature = "flexbox", feature = "grid"))]
     pub align_items: Option<AlignItems>,
+    /// Whether align-items uses the safe overflow modifier
+    #[cfg(any(feature = "flexbox", feature = "grid"))]
+    pub align_items_is_safe: bool,
     /// How this node should be aligned in the cross/block axis
     /// Falls back to the parents [`AlignItems`] if not set
     #[cfg(any(feature = "flexbox", feature = "grid"))]
@@ -501,6 +504,9 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     /// How this node's children should be aligned in the inline axis
     #[cfg(feature = "grid")]
     pub justify_items: Option<AlignItems>,
+    /// Whether justify-items uses the safe overflow modifier
+    #[cfg(feature = "grid")]
+    pub justify_items_is_safe: bool,
     /// How this node should be aligned in the inline axis
     /// Falls back to the parents [`JustifyItems`] if not set
     #[cfg(feature = "grid")]
@@ -617,9 +623,13 @@ impl<S: CheapCloneStr> Style<S> {
         #[cfg(any(feature = "flexbox", feature = "grid"))]
         align_items: None,
         #[cfg(any(feature = "flexbox", feature = "grid"))]
+        align_items_is_safe: false,
+        #[cfg(any(feature = "flexbox", feature = "grid"))]
         align_self: None,
         #[cfg(feature = "grid")]
         justify_items: None,
+        #[cfg(feature = "grid")]
+        justify_items_is_safe: false,
         #[cfg(feature = "grid")]
         justify_self: None,
         #[cfg(any(feature = "flexbox", feature = "grid"))]
@@ -895,6 +905,10 @@ impl<S: CheapCloneStr> FlexboxContainerStyle for Style<S> {
         self.align_items
     }
     #[inline(always)]
+    fn align_items_is_safe(&self) -> bool {
+        self.align_items_is_safe
+    }
+    #[inline(always)]
     fn justify_content(&self) -> Option<JustifyContent> {
         self.justify_content
     }
@@ -941,6 +955,10 @@ impl<T: FlexboxContainerStyle> FlexboxContainerStyle for &'_ T {
     #[inline(always)]
     fn justify_content_is_safe(&self) -> bool {
         (*self).justify_content_is_safe()
+    }
+    #[inline(always)]
+    fn align_items_is_safe(&self) -> bool {
+        (*self).align_items_is_safe()
     }
 }
 
@@ -1064,8 +1082,16 @@ impl<S: CheapCloneStr> GridContainerStyle for Style<S> {
         self.align_items
     }
     #[inline(always)]
+    fn align_items_is_safe(&self) -> bool {
+        self.align_items_is_safe
+    }
+    #[inline(always)]
     fn justify_items(&self) -> Option<AlignItems> {
         self.justify_items
+    }
+    #[inline(always)]
+    fn justify_items_is_safe(&self) -> bool {
+        self.justify_items_is_safe
     }
 
     #[inline(always)]
@@ -1179,6 +1205,14 @@ impl<T: GridContainerStyle> GridContainerStyle for &'_ T {
     fn justify_items(&self) -> Option<AlignItems> {
         (*self).justify_items()
     }
+    #[inline(always)]
+    fn align_items_is_safe(&self) -> bool {
+        (*self).align_items_is_safe()
+    }
+    #[inline(always)]
+    fn justify_items_is_safe(&self) -> bool {
+        (*self).justify_items_is_safe()
+    }
 }
 
 #[cfg(feature = "grid")]
@@ -1221,6 +1255,14 @@ impl<T: GridItemStyle> GridItemStyle for &'_ T {
     fn justify_self(&self) -> Option<AlignSelf> {
         (*self).justify_self()
     }
+    #[inline(always)]
+    fn align_self_is_safe(&self) -> bool {
+        (*self).align_self_is_safe()
+    }
+    #[inline(always)]
+    fn justify_self_is_safe(&self) -> bool {
+        (*self).justify_self_is_safe()
+    }
 }
 
 #[cfg(test)]
@@ -1257,9 +1299,13 @@ mod tests {
             #[cfg(any(feature = "flexbox", feature = "grid"))]
             align_items: Default::default(),
             #[cfg(any(feature = "flexbox", feature = "grid"))]
+            align_items_is_safe: false,
+            #[cfg(any(feature = "flexbox", feature = "grid"))]
             align_self: Default::default(),
             #[cfg(feature = "grid")]
             justify_items: Default::default(),
+            #[cfg(feature = "grid")]
+            justify_items_is_safe: false,
             #[cfg(feature = "grid")]
             justify_self: Default::default(),
             #[cfg(any(feature = "flexbox", feature = "grid"))]

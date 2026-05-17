@@ -100,7 +100,9 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     let justify_content = style.justify_content().unwrap_or(JustifyContent::Stretch);
     let justify_content_is_safe = style.justify_content_is_safe();
     let align_items = style.align_items();
+    let align_items_is_safe = style.align_items_is_safe();
     let justify_items = style.justify_items();
+    let justify_items_is_safe = style.justify_items_is_safe();
 
     // Note: we avoid accessing the grid rows/columns methods more than once as this can
     // cause an expensive-ish computation
@@ -592,6 +594,8 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
             container_alignment_styles,
             item.baseline_shim,
             direction,
+            align_items_is_safe,
+            justify_items_is_safe,
         );
         item.y_position = y_position;
         item.height = height;
@@ -684,7 +688,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
             // TODO: Baseline alignment support for absolutely positioned items (should check if is actually specified)
             #[cfg_attr(not(feature = "content_size"), allow(unused_variables))]
             let (content_size_contribution, _, _) =
-                align_and_position_item(tree, child, order, grid_area, container_alignment_styles, 0.0, direction);
+                align_and_position_item(tree, child, order, grid_area, container_alignment_styles, 0.0, direction, align_items_is_safe, justify_items_is_safe);
             #[cfg(feature = "content_size")]
             {
                 item_content_size_contribution = item_content_size_contribution.f32_max(content_size_contribution);
