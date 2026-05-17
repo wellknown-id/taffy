@@ -134,22 +134,30 @@ pub(super) fn align_and_position_item(
     // See: https://www.w3.org/TR/css-grid-1/#grid-item-sizing
     let width_is_auto = style.size().width.is_auto();
     let height_is_auto = style.size().height.is_auto();
-    let align_vertical = align_self.or(container_alignment_styles.vertical).unwrap_or(AlignSelf::Stretch);
-    let align_horizontal = justify_self.or(container_alignment_styles.horizontal).unwrap_or(AlignSelf::Stretch);
+    let explicit_align_vertical = align_self.or(container_alignment_styles.vertical);
+    let explicit_align_horizontal = justify_self.or(container_alignment_styles.horizontal);
+    let align_vertical = explicit_align_vertical.unwrap_or(AlignSelf::Stretch);
+    let align_horizontal = explicit_align_horizontal.unwrap_or(AlignSelf::Stretch);
     let alignment_styles = InBothAbsAxis {
         horizontal: {
+            let opposite_axis_is_explicit_stretch = explicit_align_vertical == Some(AlignSelf::Stretch);
             if align_horizontal == AlignSelf::Stretch
                 && (!width_is_auto || (aspect_ratio.is_some() && width_is_auto && !height_is_auto))
             {
+                AlignSelf::Start
+            } else if explicit_align_horizontal.is_none() && aspect_ratio.is_some() && opposite_axis_is_explicit_stretch {
                 AlignSelf::Start
             } else {
                 align_horizontal
             }
         },
         vertical: {
+            let opposite_axis_is_explicit_stretch = explicit_align_horizontal == Some(AlignSelf::Stretch);
             if align_vertical == AlignSelf::Stretch
                 && (!height_is_auto || (aspect_ratio.is_some() && height_is_auto && !width_is_auto))
             {
+                AlignSelf::Start
+            } else if explicit_align_vertical.is_none() && aspect_ratio.is_some() && opposite_axis_is_explicit_stretch {
                 AlignSelf::Start
             } else {
                 align_vertical
@@ -193,30 +201,62 @@ pub(super) fn align_and_position_item(
         None
     });
 
-    // Reapply aspect ratio after stretch and absolute position width adjustments
-    let Size { width, height } = Size { width, height: inherent_size.height }.maybe_apply_aspect_ratio(aspect_ratio);
-
-    let height = height.or_else(|| {
+    let height = inherent_size.height.or_else(|| {
         if position == Position::Absolute {
             if let (Some(top), Some(bottom)) = (inset_vertical.start, inset_vertical.end) {
                 return Some(f32_max(grid_area_minus_item_margins_size.height - top - bottom, 0.0));
             }
         }
 
+        None
+    });
+
+    let stretch_width = if margin.left.is_some()
+        && margin.right.is_some()
+        && alignment_styles.horizontal == AlignSelf::Stretch
+        && position != Position::Absolute
+    {
+        Some(grid_area_minus_item_margins_size.width)
+    } else {
+        None
+    };
+
+    let stretch_height = if margin.top.is_some()
+        && margin.bottom.is_some()
+        && alignment_styles.vertical == AlignSelf::Stretch
+        && position != Position::Absolute
+    {
+        Some(grid_area_minus_item_margins_size.height)
+    } else {
+        None
+    };
+
+    // When only one axis stretches, derive the opposite axis from the aspect ratio.
+    let (width, height) = if aspect_ratio.is_some() && width.is_none() && height.is_none() {
+        match (stretch_width, stretch_height) {
+            (Some(width), None) => (Some(width), None),
+            (None, Some(height)) => (None, Some(height)),
+            _ => (width, height),
+        }
+    } else {
+        (width, height)
+    };
+
+    // Reapply aspect ratio after absolute position adjustments and any single-axis stretch.
+    let Size { width, height } = Size { width, height }.maybe_apply_aspect_ratio(aspect_ratio);
+
+    let height = height.or_else(|| {
         // Apply height based on stretch alignment if:
         //  - Alignment style is "stretch"
         //  - The node is not absolutely positioned
         //  - The node does not have auto margins in this axis.
-        if margin.top.is_some()
-            && margin.bottom.is_some()
-            && alignment_styles.vertical == AlignSelf::Stretch
-            && position != Position::Absolute
-        {
-            return Some(grid_area_minus_item_margins_size.height);
+        if let Some(stretch_height) = stretch_height {
+            return Some(stretch_height);
         }
 
         None
     });
+    let width = width.or_else(|| stretch_width);
     // Reapply aspect ratio after stretch and absolute position height adjustments
     let Size { width, height } = Size { width, height }.maybe_apply_aspect_ratio(aspect_ratio);
 
