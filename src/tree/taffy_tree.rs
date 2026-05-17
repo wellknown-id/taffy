@@ -922,7 +922,7 @@ impl<NodeContext> TaffyTree<NodeContext> {
 mod tests {
 
     use super::*;
-    use crate::style::{Dimension, Display, FlexDirection, Position};
+    use crate::style::{Dimension, Display, FlexDirection, FlexWrap, Position};
     use crate::Rect;
     use crate::style_helpers::*;
     use crate::util::sys;
@@ -1402,6 +1402,115 @@ mod tests {
         let layout = taffy.layout(node).unwrap();
         assert_eq!(layout.location.x, 10f32);
         assert_eq!(layout.location.y, 30f32);
+    }
+
+    #[test]
+    fn column_reverse_wrap_positions_items_from_bottom_without_dropping_top_margin() {
+        let mut taffy: TaffyTree<()> = TaffyTree::new();
+
+        let item1 = taffy
+            .new_leaf(Style {
+                size: Size::from_lengths(100.0, 90.0),
+                margin: Rect {
+                    top: length(10.0),
+                    right: length(10.0),
+                    ..Rect::zero()
+                },
+                ..Default::default()
+            })
+            .unwrap();
+        let item2 = taffy
+            .new_leaf(Style {
+                size: Size::from_lengths(100.0, 90.0),
+                margin: Rect {
+                    top: length(10.0),
+                    right: length(10.0),
+                    ..Rect::zero()
+                },
+                ..Default::default()
+            })
+            .unwrap();
+        let item3 = taffy
+            .new_leaf(Style {
+                size: Size::from_lengths(100.0, 90.0),
+                margin: Rect {
+                    top: length(10.0),
+                    right: length(10.0),
+                    ..Rect::zero()
+                },
+                ..Default::default()
+            })
+            .unwrap();
+        let item4 = taffy
+            .new_leaf(Style {
+                size: Size::from_lengths(100.0, 140.0),
+                margin: Rect {
+                    top: length(10.0),
+                    right: length(10.0),
+                    ..Rect::zero()
+                },
+                ..Default::default()
+            })
+            .unwrap();
+        let item5 = taffy
+            .new_leaf(Style {
+                size: Size::from_lengths(100.0, 140.0),
+                margin: Rect {
+                    top: length(10.0),
+                    right: length(10.0),
+                    ..Rect::zero()
+                },
+                ..Default::default()
+            })
+            .unwrap();
+        let item6 = taffy
+            .new_leaf(Style {
+                size: Size::from_lengths(100.0, 290.0),
+                margin: Rect {
+                    top: length(10.0),
+                    right: length(10.0),
+                    ..Rect::zero()
+                },
+                ..Default::default()
+            })
+            .unwrap();
+
+        let root = taffy
+            .new_with_children(
+                Style {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::ColumnReverse,
+                    flex_wrap: FlexWrap::Wrap,
+                    size: Size::from_lengths(400.0, 300.0),
+                    ..Default::default()
+                },
+                &[item3, item2, item1, item5, item4, item6],
+            )
+            .unwrap();
+
+        taffy.compute_layout(root, Size::MAX_CONTENT).unwrap();
+
+        let item1_layout = taffy.layout(item1).unwrap();
+        let item2_layout = taffy.layout(item2).unwrap();
+        let item3_layout = taffy.layout(item3).unwrap();
+        let item4_layout = taffy.layout(item4).unwrap();
+        let item5_layout = taffy.layout(item5).unwrap();
+        let item6_layout = taffy.layout(item6).unwrap();
+
+        assert_eq!(item1_layout.location.x, 0.0);
+        assert_eq!(item1_layout.location.y, 0.0);
+        assert_eq!(item2_layout.location.x, 0.0);
+        assert_eq!(item2_layout.location.y, 100.0);
+        assert_eq!(item3_layout.location.x, 0.0);
+        assert_eq!(item3_layout.location.y, 200.0);
+
+        assert!(item4_layout.location.x > item1_layout.location.x);
+        assert_eq!(item4_layout.location.y, 0.0);
+        assert_eq!(item5_layout.location.x, item4_layout.location.x);
+        assert_eq!(item5_layout.location.y, 150.0);
+
+        assert!(item6_layout.location.x > item4_layout.location.x);
+        assert_eq!(item6_layout.location.y, 0.0);
     }
 
     #[test]

@@ -2132,6 +2132,8 @@ fn calculate_flex_item(
             - item.margin.main_end(direction)
             - main_relative_inset
             - size.main(direction)
+    } else if matches!(direction, FlexDirection::ColumnReverse) {
+        *total_offset_main + item.offset_main + item.margin.main_end(direction) + main_relative_inset
     } else {
         *total_offset_main + item.offset_main + item.margin.main_start(direction) + main_relative_inset
     };
@@ -2148,7 +2150,13 @@ fn calculate_flex_item(
         let inner_baseline = layout_output.first_baselines.y.unwrap_or(size.height);
         item.baseline = baseline_offset_cross + inner_baseline;
     } else {
-        let baseline_offset_main = *total_offset_main + item.offset_main + item.margin.main_start(direction);
+        let baseline_offset_main = *total_offset_main
+            + item.offset_main
+            + if matches!(direction, FlexDirection::ColumnReverse) {
+                item.margin.main_end(direction)
+            } else {
+                item.margin.main_start(direction)
+            };
         let inner_baseline = layout_output.first_baselines.y.unwrap_or(size.height);
         item.baseline = baseline_offset_main + inner_baseline;
     }
