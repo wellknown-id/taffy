@@ -1,6 +1,6 @@
 //! Computes the [flexbox](https://css-tricks.com/snippets/css/a-guide-to-flexbox/) layout algorithm on [`TaffyTree`](crate::TaffyTree) according to the [spec](https://www.w3.org/TR/css-flexbox-1/)
 use crate::compute::common::alignment::compute_alignment_offset;
-use crate::geometry::{Line, Point, Rect, Size};
+use crate::geometry::{AbsoluteAxis, Line, Point, Rect, Size};
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, AvailableSpace, FlexWrap, JustifyContent, LengthPercentageAuto, Overflow,
     Position,
@@ -558,7 +558,6 @@ fn generate_anonymous_flex_items(
                 size: child_style
                     .size()
                     .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
-                    .maybe_apply_aspect_ratio(aspect_ratio)
                     .maybe_add(box_sizing_adjustment),
                 min_size: child_style
                     .min_size()
@@ -759,8 +758,20 @@ fn determine_flex_base_size(
             {
                 let pb = child.padding + child.border;
                 let pb_cross = pb.cross_axis_sum(dir);
-                let content_cross = child_known_dimensions.cross(dir).unwrap() - pb_cross;
-                let content_main = content_cross * aspect_ratio;
+                // Clamp cross size by min/max constraints before aspect-ratio transfer,
+                // so that the derived main size reflects cross-axis clamping
+                // (e.g. max-width on the cross axis should affect the main size).
+                let content_cross = child_known_dimensions.cross(dir).unwrap().maybe_clamp(
+                    child.min_size.cross(dir),
+                    child.max_size_ignoring_aspect_ratio.cross(dir),
+                ) - pb_cross;
+                // Convert cross→main using aspect_ratio (ratio = width/height):
+                //   cross=width → main=width/ratio = height  (column flex, cross_axis is Horizontal)
+                //   cross=height → main=height*ratio = width  (row flex, cross_axis is Vertical)
+                let content_main = match constants.dir.cross_axis() {
+                    AbsoluteAxis::Horizontal => content_cross / aspect_ratio,
+                    AbsoluteAxis::Vertical => content_cross * aspect_ratio,
+                };
                 child_known_dimensions.set_main(dir, Some(content_main + pb.main_axis_sum(dir)));
             }
         }
@@ -1599,7 +1610,13 @@ fn determine_hypothetical_cross_size(
         });
         let child_inner_cross = if let Some(aspect_ratio) = aspect_ratio {
             let preferred_main = child.target_size.main(constants.dir);
-            let preferred_cross = preferred_main / aspect_ratio;
+            // Convert main→cross using aspect_ratio (ratio = width/height):
+            //   main=height,cross=width → cross = main*ratio  (column flex, cross_axis is Horizontal)
+            //   main=width,cross=height → cross = main/ratio  (row flex, cross_axis is Vertical)
+            let preferred_cross = match constants.dir.cross_axis() {
+                AbsoluteAxis::Horizontal => preferred_main * aspect_ratio,
+                AbsoluteAxis::Vertical => preferred_main / aspect_ratio,
+            };
             preferred_cross
                 .maybe_clamp(min_cross, max_cross)
                 .max(child_inner_cross)
