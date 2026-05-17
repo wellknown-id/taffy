@@ -326,6 +326,35 @@ mod measure {
     }
 
     #[test]
+    fn stretch_with_aspect_ratio_does_not_transfer_cross_axis_max_to_main_axis() {
+        let mut taffy: TaffyTree<()> = TaffyTree::new();
+        let child = taffy
+            .new_leaf(Style {
+                flex_grow: 1.0,
+                aspect_ratio: Some(0.5),
+                max_size: Size { width: auto(), height: Dimension::from_length(100.0) },
+                ..Default::default()
+            })
+            .unwrap();
+
+        let node = taffy
+            .new_with_children(
+                Style {
+                    display: Display::Flex,
+                    size: Size { width: Dimension::from_length(100.0), height: auto() },
+                    ..Default::default()
+                },
+                &[child],
+            )
+            .unwrap();
+
+        taffy.compute_layout(node, Size::MAX_CONTENT).unwrap();
+
+        assert_eq!(taffy.layout(child).unwrap().size.width, 100.0);
+        assert_eq!(taffy.layout(child).unwrap().size.height, 100.0);
+    }
+
+    #[test]
     fn measure_absolute_child() {
         let mut taffy = new_test_tree();
         let child = taffy

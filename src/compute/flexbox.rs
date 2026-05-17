@@ -13,7 +13,7 @@ use crate::util::debug::debug_log;
 use crate::util::sys::{f32_max, new_vec_with_capacity, Vec};
 use crate::util::MaybeMath;
 use crate::util::{MaybeResolve, ResolveOrZero};
-use crate::{BoxGenerationMode, BoxSizing, CompactLength, Direction};
+use crate::{BoxGenerationMode, BoxSizing, Direction};
 
 use super::common::alignment::apply_alignment_fallback;
 #[cfg(feature = "content_size")]
@@ -930,14 +930,17 @@ fn determine_flex_base_size(
             } else {
                 min_content_main_size.maybe_min(child.size.main(dir))
             };
-            let clamped_min_content_size = content_based_min.maybe_min(child.max_size.main(dir));
+            // Flex main-axis sizing should not treat cross-axis max constraints transferred via
+            // aspect-ratio as if they were explicit main-axis max constraints.
+            let clamped_min_content_size = content_based_min.maybe_min(child.max_size_ignoring_aspect_ratio.main(dir));
             clamped_min_content_size.maybe_max(padding_border_axes_sums.main(dir))
         });
 
         let hypothetical_inner_min_main =
             child.resolved_minimum_main_size.maybe_max(padding_border_axes_sums.main(constants.dir));
-        let hypothetical_inner_size =
-            child.flex_basis.maybe_clamp(Some(hypothetical_inner_min_main), child.max_size.main(constants.dir));
+        let hypothetical_inner_size = child
+            .flex_basis
+            .maybe_clamp(Some(hypothetical_inner_min_main), child.max_size_ignoring_aspect_ratio.main(constants.dir));
         let hypothetical_outer_size = hypothetical_inner_size + child.margin.main_axis_sum(constants.dir);
 
         child.hypothetical_inner_size.set_main(constants.dir, hypothetical_inner_size);
@@ -1172,7 +1175,7 @@ fn determine_container_main_size(
                     for item in line.items.iter_mut() {
                         let style_min = item.min_size.main(constants.dir);
                         let style_preferred = item.size.main(constants.dir);
-                        let style_max = item.max_size.main(constants.dir);
+                        let style_max = item.max_size_ignoring_aspect_ratio.main(constants.dir);
 
                         // The spec seems a bit unclear on this point (my initial reading was that the `.maybe_max(style_preferred)` should
                         // not be included here), however this matches both Chrome and Firefox as of 9th March 2023.
@@ -1517,7 +1520,7 @@ fn resolve_flexible_lengths(line: &mut FlexLine, constants: &AlgoConstants) {
         let mut total_violation = 0.0_f32;
         for child in line.items.iter_mut().filter(|child: &&mut FlexItem| !child.frozen) {
             let resolved_min_main: Option<f32> = child.resolved_minimum_main_size.into();
-            let max_main = child.max_size.main(constants.dir);
+            let max_main = child.max_size_ignoring_aspect_ratio.main(constants.dir);
             let clamped = child.target_size.main(constants.dir).maybe_clamp(resolved_min_main, max_main).max(0.0);
             child.violation = clamped - child.target_size.main(constants.dir);
             child.target_size.set_main(constants.dir, clamped);
@@ -1570,6 +1573,7 @@ fn determine_hypothetical_cross_size(
 
         let min_cross = child.min_size.cross(constants.dir);
         let max_cross = child.max_size.cross(constants.dir);
+        let aspect_ratio = tree.get_flexbox_child_style(child.node).aspect_ratio();
 
         let child_cross =
             child.size.cross(constants.dir).maybe_clamp(min_cross, max_cross).maybe_max(padding_border_sum);
@@ -1596,6 +1600,15 @@ fn determine_hypothetical_cross_size(
             .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
             .max(padding_border_sum)
         });
+        let child_inner_cross = if let Some(aspect_ratio) = aspect_ratio {
+            let preferred_main = child.target_size.main(constants.dir);
+            let preferred_cross = preferred_main / aspect_ratio;
+            preferred_cross
+                .maybe_clamp(min_cross, max_cross)
+                .max(child_inner_cross)
+        } else {
+            child_inner_cross
+        };
         let child_outer_cross = child_inner_cross + child.margin.cross_axis_sum(constants.dir);
 
         child.hypothetical_inner_size.set_cross(constants.dir, child_inner_cross);
@@ -1782,7 +1795,7 @@ fn handle_align_content_stretch(flex_lines: &mut [FlexLine], node_size: Size<Opt
 ///   **Note that this step does not affect the main size of the flex item, even if it has an intrinsic aspect ratio**.
 #[inline]
 fn determine_used_cross_size(
-    tree: &impl LayoutFlexboxContainer,
+    _tree: &impl LayoutFlexboxContainer,
     flex_lines: &mut [FlexLine],
     constants: &AlgoConstants,
 ) {
@@ -1797,10 +1810,6 @@ fn determine_used_cross_size(
                     && !child.margin_is_auto.cross_end(constants.dir)
                     && child.cross_size_is_auto
                 {
-                    let pb_sum = (child.padding + child.border).sum_axes();
-                    let box_sizing_adjustment =
-                        if child.box_sizing == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
-
                     let max_size_ignoring_aspect_ratio = child.max_size_ignoring_aspect_ratio;
 
                     (line_cross_size - child.margin.cross_axis_sum(constants.dir)).maybe_clamp(
@@ -2121,7 +2130,11 @@ fn calculate_flex_item(
     let effective_line_offset_cross = if is_rtl_column { 0.0 } else { line_offset_cross };
 
     let offset_main = if is_rtl_row {
-        *total_offset_main - item.offset_main - item.margin.main_end(direction) - main_relative_inset - size.width
+        *total_offset_main
+            - item.offset_main
+            - item.margin.main_end(direction)
+            - main_relative_inset
+            - size.main(direction)
     } else {
         *total_offset_main + item.offset_main + item.margin.main_start(direction) + main_relative_inset
     };
