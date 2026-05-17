@@ -43,6 +43,10 @@ struct FlexItem {
     cross_size_is_auto: bool,
     /// Whether the main axis size is percentage-based (contains % or calc with %)
     main_size_is_percent_based: bool,
+    /// Whether flex-basis was an indefinite percentage (couldn't resolve because the
+    /// container's main axis size was indefinite). When true, the main-size property
+    /// (width/height on the flex item) should be ignored for sizing purposes.
+    flex_basis_is_indefinite_percent: bool,
     /// The specified size suggestion with percentages resolved to 0
     /// (used for percentage-based sizes on replaced elements)
     specified_size_suggestion: Option<f32>,
@@ -606,6 +610,7 @@ fn generate_anonymous_flex_items(
                         None
                     }
                 },
+                flex_basis_is_indefinite_percent: false,
                 box_sizing: child_style.box_sizing(),                overflow: child_style.overflow(),
                 scrollbar_width: child_style.scrollbar_width(),
                 flex_grow: child_style.flex_grow(),
@@ -751,10 +756,14 @@ fn determine_flex_base_size(
         let pb_main_sum = pb.main_axis_sum(constants.dir);
 
         let container_width = constants.node_inner_size.main(dir);
+        let flex_basis_style = child_style.flex_basis();
+        let flex_basis_tag = flex_basis_style.into_raw().tag();
+        let flex_basis_is_indefinite_percent =
+            flex_basis_tag == crate::style::CompactLength::PERCENT_TAG && container_width.is_none();
+        child.flex_basis_is_indefinite_percent = flex_basis_is_indefinite_percent;
         let box_sizing_adjustment =
             if child.box_sizing == BoxSizing::ContentBox { pb.sum_axes() } else { Size::ZERO }.main(dir);
-        let flex_basis = child_style
-            .flex_basis()
+        let flex_basis = flex_basis_style
             .maybe_resolve(container_width, |val, basis| tree.calc(val, basis))
             .maybe_add(box_sizing_adjustment);
 
@@ -796,8 +805,18 @@ fn determine_flex_base_size(
             // Note: `child.size` has already been resolved against aspect_ratio in generate_anonymous_flex_items
             // So B will just work here by using main_size without special handling for aspect_ratio
             let main_size = child.size.main(dir);
-            if let Some(flex_basis) = flex_basis.or(main_size) {
+            if let Some(flex_basis) = flex_basis {
                 break 'flex_basis flex_basis;
+            };
+
+            // If flex-basis was an indefinite percentage (couldn't resolve because the container's
+            // main axis size is indefinite), skip the main_size (height/width property) fallback.
+            // Per spec, when a percentage flex-basis can't be resolved, it is treated as auto,
+            // and the main-size property should be ignored — the item sizes to its content instead.
+            if flex_basis_is_indefinite_percent {
+                // Fall through to content sizing (E)
+            } else if let Some(main_size) = main_size {
+                break 'flex_basis main_size;
             };
 
             // C. If the used flex basis is content or depends on its available space,
@@ -837,7 +856,7 @@ fn determine_flex_base_size(
                 .with_cross(dir, cross_axis_available_space);
 
             debug_log!("COMPUTE CHILD BASE SIZE:");
-            break 'flex_basis tree.measure_child_size(
+            let content_size = tree.measure_child_size(
                 child.node,
                 child_known_dimensions,
                 child_parent_size,
@@ -846,6 +865,7 @@ fn determine_flex_base_size(
                 dir.main_axis(),
                 Line::FALSE,
             );
+            break 'flex_basis content_size;
         };
 
         // Floor flex-basis by the padding_border_sum (floors inner_flex_basis at zero)
@@ -1145,7 +1165,15 @@ fn determine_container_main_size(
                         // Spec modification: https://www.w3.org/TR/css-flexbox-1/#change-2016-max-contribution
                         // Issue: https://github.com/w3c/csswg-drafts/issues/1435
                         // Gentest: padding_border_overrides_size_flex_basis_0.html
-                        let clamping_basis = Some(item.flex_basis).maybe_max(style_preferred);
+                        //
+                        // However, when flex-basis was an indefinite percentage (couldn't resolve because the
+                        // container's main axis size was indefinite), the main-size property (width/height)
+                        // should be ignored per spec — the item sizes to its content instead.
+                        let clamping_basis = if item.flex_basis_is_indefinite_percent {
+                            Some(item.flex_basis)
+                        } else {
+                            Some(item.flex_basis).maybe_max(style_preferred)
+                        };
                         let flex_basis_min = clamping_basis.filter(|_| item.flex_shrink == 0.0);
                         let flex_basis_max = clamping_basis.filter(|_| item.flex_grow == 0.0);
 
