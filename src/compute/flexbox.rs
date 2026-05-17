@@ -424,7 +424,7 @@ fn compute_preliminary(tree: &mut impl LayoutFlexboxContainer, node: NodeId, inp
         flex_lines[0]
             .items
             .iter()
-            .find(|item| constants.is_column || item.align_self == AlignSelf::Baseline)
+            .find(|item| constants.is_column || item.align_self == AlignSelf::Baseline || item.align_self == AlignSelf::LastBaseline)
             .or_else(|| flex_lines[0].items.iter().next())
             .map(|child| child.baseline)
     };
@@ -2027,6 +2027,26 @@ fn align_flex_items_along_cross_axis(
                 }
             }
         }
+        AlignSelf::LastBaseline => {
+            if constants.is_row {
+                // TODO: Implement proper last baseline alignment.
+                // Currently falls back to end alignment (matches FlexEnd behavior).
+                if constants.is_wrap_reverse ^ cross_axis_should_reverse {
+                    0.0
+                } else {
+                    free_space
+                }
+            } else {
+                // Until we support vertical writing modes, baseline alignment only makes sense if
+                // the constants.direction is row, so we treat it as flex-end alignment in columns.
+                let baseline_column_should_reverse = cross_axis_should_reverse && !constants.is_wrap;
+                if constants.is_wrap_reverse ^ baseline_column_should_reverse {
+                    0.0
+                } else {
+                    free_space
+                }
+            }
+        }
         AlignSelf::Stretch => {
             if constants.is_wrap_reverse ^ cross_axis_should_reverse {
                 free_space
@@ -2682,7 +2702,7 @@ fn perform_absolute_layout_on_absolute_children(
 
             match align_self {
                 AlignSelf::Start | AlignSelf::Baseline => cross_writing_mode_start,
-                AlignSelf::End => cross_writing_mode_end,
+                AlignSelf::End | AlignSelf::LastBaseline => cross_writing_mode_end,
                 AlignSelf::FlexStart | AlignSelf::Stretch => {
                     if cross_axis_flex_start_reversed {
                         cross_end_pos

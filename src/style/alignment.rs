@@ -26,6 +26,8 @@ pub enum AlignItems {
     Center,
     /// Items are aligned such as their baselines align
     Baseline,
+    /// Items are aligned such as their last baselines align
+    LastBaseline,
     /// Stretch to fill the container
     Stretch,
 }
@@ -38,6 +40,7 @@ crate::util::parse::impl_parse_for_keyword_enum!(AlignItems,
     "flex-end" => FlexEnd,
     "center" => Center,
     "baseline" => Baseline,
+    "last-baseline" => LastBaseline,
     "stretch" => Stretch,
 );
 

@@ -404,7 +404,7 @@ pub(super) fn align_item_within_area(
                 resolved_margin.start
             }
         }
-        AlignSelf::End | AlignSelf::FlexEnd => {
+        AlignSelf::End | AlignSelf::FlexEnd | AlignSelf::LastBaseline => {
             if direction.is_rtl() {
                 resolved_margin.start
             } else {
