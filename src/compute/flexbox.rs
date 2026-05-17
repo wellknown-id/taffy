@@ -737,7 +737,7 @@ fn determine_flex_base_size(
         };
 
         // Known dimensions for child sizing
-        let child_known_dimensions = {
+        let mut child_known_dimensions = {
             let mut ckd = child.size.with_main(dir, None);
             if child.align_self == AlignSelf::Stretch
                 && !child.margin_is_auto.cross_start(constants.dir)
@@ -751,6 +751,22 @@ fn determine_flex_base_size(
             }
             ckd
         };
+
+        // Step B: if the flex item has an intrinsic aspect-ratio, a used flex basis
+        // of content, and a definite cross size (from stretch above), derive the main
+        // size from the cross size via aspect-ratio.
+        if let Some(aspect_ratio) = child_style.aspect_ratio() {
+            if child_known_dimensions.main(dir).is_none()
+                && child_known_dimensions.cross(dir).is_some()
+                && child.size.main(dir).is_none()
+            {
+                let pb = child.padding + child.border;
+                let pb_cross = pb.cross_axis_sum(dir);
+                let content_cross = child_known_dimensions.cross(dir).unwrap() - pb_cross;
+                let content_main = content_cross * aspect_ratio;
+                child_known_dimensions.set_main(dir, Some(content_main + pb.main_axis_sum(dir)));
+            }
+        }
 
         let pb = child.padding + child.border;
         let pb_main_sum = pb.main_axis_sum(constants.dir);
