@@ -136,8 +136,20 @@ pub(super) fn align_and_position_item(
     let height_is_auto = style.size().height.is_auto();
     let explicit_align_vertical = align_self.or(container_alignment_styles.vertical);
     let explicit_align_horizontal = justify_self.or(container_alignment_styles.horizontal);
-    let align_vertical = explicit_align_vertical.unwrap_or(AlignSelf::Stretch);
-    let align_horizontal = explicit_align_horizontal.unwrap_or(AlignSelf::Stretch);
+    let align_vertical = explicit_align_vertical.unwrap_or_else(|| {
+        if style.is_compressible_replaced() {
+            AlignSelf::Start
+        } else {
+            AlignSelf::Stretch
+        }
+    });
+    let align_horizontal = explicit_align_horizontal.unwrap_or_else(|| {
+        if style.is_compressible_replaced() {
+            AlignSelf::Start
+        } else {
+            AlignSelf::Stretch
+        }
+    });
     let alignment_styles = InBothAbsAxis {
         horizontal: {
             let opposite_axis_is_explicit_stretch = explicit_align_vertical == Some(AlignSelf::Stretch);
