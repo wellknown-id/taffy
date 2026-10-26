@@ -1049,13 +1049,20 @@ fn distribute_item_space_to_base_size(
                 filter = (|_| true) as fn(&GridTrack) -> bool;
             }
 
+            // (Beyond limits, only a fit-content() argument still limits a base size.)
             distribute_space_up_to_limits(
                 extra_space,
                 tracks,
                 filter,
                 &track_distribution_proportion,
                 get_base_size,
-                &track_limit, // Should apply only fit-content limit here?
+                &|track: &GridTrack| {
+                    if track.max_track_sizing_function.is_fit_content() {
+                        track_limit(track)
+                    } else {
+                        f32::INFINITY
+                    }
+                },
             );
         }
 

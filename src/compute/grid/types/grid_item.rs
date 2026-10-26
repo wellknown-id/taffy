@@ -560,7 +560,12 @@ impl GridItem {
                             tree.resolve_calc_value(val, basis)
                         })
                         .map(|limit| (limit - margins).max(0.0));
-                    minimum_contribution.maybe_min(max_size).maybe_min(limit)
+                    // (A box is never smaller than its padding and border; percentages, cyclic here, as zero.)
+                    let floor = (self.padding.resolve_or_zero(Size::NONE, |val, basis| tree.calc(val, basis))
+                        + self.border.resolve_or_zero(Size::NONE, |val, basis| tree.calc(val, basis)))
+                    .sum_axes()
+                    .get(axis);
+                    minimum_contribution.maybe_min(max_size).maybe_min(limit).max(floor)
                 } else {
                     0.0
                 }
