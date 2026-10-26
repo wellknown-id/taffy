@@ -515,14 +515,14 @@ impl GridItem {
                 // TODO: support overflow property
 
                 // it spans at least one track in that axis whose min track sizing function is auto
-                let spans_auto_min_track = axis_tracks
+                let spans_auto_min_track = item_axis_tracks
                     .iter()
                     // TODO: should this be 'behaves as auto' rather than just literal auto?
                     .any(|track| track.min_track_sizing_function.is_auto());
 
                 // if it spans more than one track in that axis, none of those tracks are flexible
                 let only_span_one_track = item_axis_tracks.len() == 1;
-                let spans_a_flexible_track = axis_tracks.iter().any(|track| track.max_track_sizing_function.is_fr());
+                let spans_a_flexible_track = item_axis_tracks.iter().any(|track| track.max_track_sizing_function.is_fr());
 
                 let use_content_based_minimum =
                     spans_auto_min_track && (only_span_one_track || !spans_a_flexible_track);
@@ -542,19 +542,31 @@ impl GridItem {
                         minimum_contribution = minimum_contribution.maybe_min(size).maybe_min(max_size);
                     }
 
-                    minimum_contribution
+                    // The content-based minimum size is clamped by the maximum size in the affected axis, if it's
+                    // definite, and, if the item spans only tracks with a fixed max track sizing function, by the
+                    // stretch fit into the grid area's maximum size (those tracks' sum less the item's margins).
+                    // Note: The argument to fit-content() does not clamp the content-based minimum size in the same
+                    // way as a fixed max track sizing function.
+                    // See: https://www.w3.org/TR/css-grid-2/#min-size-auto
+                    let max_size = self
+                        .max_size
+                        .maybe_resolve(inner_node_size, |val, basis| tree.calc(val, basis))
+                        .maybe_apply_aspect_ratio(self.aspect_ratio)
+                        .maybe_add(box_sizing_adjustment)
+                        .get(axis);
+                    let margins = self.margins_axis_sums_with_baseline_shims(inner_node_size.width, tree).get(axis);
+                    let limit = self
+                        .spanned_fixed_track_limit(axis, axis_tracks, inner_node_size.get(axis), &|val, basis| {
+                            tree.resolve_calc_value(val, basis)
+                        })
+                        .map(|limit| (limit - margins).max(0.0));
+                    minimum_contribution.maybe_min(max_size).maybe_min(limit)
                 } else {
                     0.0
                 }
             });
 
-        // In all cases, the size suggestion is additionally clamped by the maximum size in the affected axis, if it’s definite.
-        // Note: The argument to fit-content() does not clamp the content-based minimum size in the same way as a fixed max track
-        // sizing function.
-        let limit = self.spanned_fixed_track_limit(axis, axis_tracks, inner_node_size.get(axis), &|val, basis| {
-            tree.resolve_calc_value(val, basis)
-        });
-        size.maybe_min(limit)
+        size
     }
 
     /// Retrieve the item's minimum contribution from the cache or compute it using the provided parameters

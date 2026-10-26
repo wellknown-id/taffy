@@ -285,6 +285,11 @@ fn build_style<S: CheapCloneStr>(xnode: roxmltree::Node) -> taffy::Style<S> {
         justify_self: maybe_parse(xnode.attribute("justify-self")),
         align_content: maybe_parse(xnode.attribute("align-content")),
         justify_content: maybe_parse(xnode.attribute("justify-content")),
+        // (The fixtures don't use `safe` alignment.)
+        align_items_is_safe: false,
+        justify_items_is_safe: false,
+        align_content_is_safe: false,
+        justify_content_is_safe: false,
 
         text_align: parse_or_default(xnode.attribute("text-align")),
         flex_direction: parse_or_default(xnode.attribute("flex-direction")),
