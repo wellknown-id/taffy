@@ -15,6 +15,7 @@ use crate::tree::{
     TraversePartialTree, TraverseTree,
 };
 use crate::util::debug::{debug_log, debug_log_node};
+use crate::util::ResolveOrZero;
 use crate::util::sys::{new_vec_with_capacity, ChildrenVec, Vec};
 
 use crate::compute::{
@@ -283,6 +284,23 @@ where
         //   - Else call the passed closure (below) to compute the result
         //
         // If there was no cache match and a new result needs to be computed then that result will be added to the cache
+        // A size-contained axis sized by its content is its contained size
+        // (plus padding and border), whatever its children: its min-content
+        // and max-content sizes are both that.
+        let mut inputs = inputs;
+        let contained = self.taffy.nodes[node_id.into()].style.contain_intrinsic_size;
+        if contained.width.is_some() || contained.height.is_some() {
+            let style = &self.taffy.nodes[node_id.into()].style;
+            let padding = style.padding.clone().resolve_or_zero(inputs.parent_size.width, |_, _| 0.0);
+            let border = style.border.clone().resolve_or_zero(inputs.parent_size.width, |_, _| 0.0);
+            let edges = padding + border;
+            if let (Some(width), None) = (contained.width, inputs.known_dimensions.width) {
+                inputs.known_dimensions.width = Some(width + edges.horizontal_axis_sum());
+            }
+            if let (Some(height), None) = (contained.height, inputs.known_dimensions.height) {
+                inputs.known_dimensions.height = Some(height + edges.vertical_axis_sum());
+            }
+        }
         compute_cached_layout(self, node_id, inputs, |tree, node_id, inputs| {
             let display_mode = tree.taffy.nodes[node_id.into()].style.display;
             let has_children = tree.child_count(node_id) > 0;

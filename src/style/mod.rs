@@ -497,6 +497,11 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     ///
     /// The ratio is calculated as width divided by height.
     pub aspect_ratio: Option<f32>,
+    /// The content-box size a size-contained axis has for intrinsic sizing
+    /// (CSS `contain: size` with `contain-intrinsic-size`): when set, the
+    /// box's min-content and max-content contributions in that axis are this
+    /// size plus its padding and border, whatever its children.
+    pub contain_intrinsic_size: Size<Option<f32>>,
 
     // Spacing Properties
     /// How large should the margin be on each side?
@@ -636,6 +641,7 @@ impl<S: CheapCloneStr> Style<S> {
         min_size: Size::auto(),
         max_size: Size::auto(),
         aspect_ratio: None,
+        contain_intrinsic_size: Size { width: None, height: None },
         #[cfg(any(feature = "flexbox", feature = "grid"))]
         gap: Size::zero(),
         // Alignment
@@ -1352,6 +1358,7 @@ mod tests {
             min_size: Size::auto(),
             max_size: Size::auto(),
             aspect_ratio: Default::default(),
+            contain_intrinsic_size: Size { width: None, height: None },
             #[cfg(feature = "grid")]
             grid_template_rows: Default::default(),
             #[cfg(feature = "grid")]
