@@ -535,6 +535,12 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     /// Falls back to the parents [`JustifyItems`] if not set
     #[cfg(feature = "grid")]
     pub justify_self: Option<AlignSelf>,
+    /// Whether align-self has the safe overflow modifier
+    #[cfg(any(feature = "flexbox", feature = "grid"))]
+    pub align_self_is_safe: bool,
+    /// Whether justify-self has the safe overflow modifier
+    #[cfg(feature = "grid")]
+    pub justify_self_is_safe: bool,
     /// How should content contained within this item be aligned in the cross/block axis
     #[cfg(any(feature = "flexbox", feature = "grid"))]
     pub align_content: Option<AlignContent>,
@@ -657,6 +663,10 @@ impl<S: CheapCloneStr> Style<S> {
         justify_items_is_safe: false,
         #[cfg(feature = "grid")]
         justify_self: None,
+        #[cfg(any(feature = "flexbox", feature = "grid"))]
+        align_self_is_safe: false,
+        #[cfg(feature = "grid")]
+        justify_self_is_safe: false,
         #[cfg(any(feature = "flexbox", feature = "grid"))]
         align_content: None,
         #[cfg(any(feature = "flexbox", feature = "grid"))]
@@ -1007,7 +1017,7 @@ impl<S: CheapCloneStr> FlexboxItemStyle for Style<S> {
     }
     #[inline(always)]
     fn align_self_is_safe(&self) -> bool {
-        false // Style doesn't have align_self_is_safe field; this is tracked via FlexItem
+        self.align_self_is_safe
     }
 }
 
@@ -1260,6 +1270,14 @@ impl<S: CheapCloneStr> GridItemStyle for Style<S> {
     fn justify_self(&self) -> Option<AlignSelf> {
         self.justify_self
     }
+    #[inline(always)]
+    fn align_self_is_safe(&self) -> bool {
+        self.align_self_is_safe
+    }
+    #[inline(always)]
+    fn justify_self_is_safe(&self) -> bool {
+        self.justify_self_is_safe
+    }
 }
 
 #[cfg(feature = "grid")]
@@ -1333,6 +1351,10 @@ mod tests {
             justify_items_is_safe: false,
             #[cfg(feature = "grid")]
             justify_self: Default::default(),
+            #[cfg(any(feature = "flexbox", feature = "grid"))]
+            align_self_is_safe: false,
+            #[cfg(feature = "grid")]
+            justify_self_is_safe: false,
             #[cfg(any(feature = "flexbox", feature = "grid"))]
             align_content: Default::default(),
             #[cfg(any(feature = "flexbox", feature = "grid"))]
