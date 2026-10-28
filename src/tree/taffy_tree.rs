@@ -8,7 +8,7 @@ use slotmap::{DefaultKey, SlotMap};
 #[cfg(feature = "block_layout")]
 use crate::block::BlockContext;
 use crate::geometry::Size;
-use crate::style::{AvailableSpace, Display, Style};
+use crate::style::{AvailableSpace, Dimension, Display, Style};
 use crate::sys::DefaultCheapStr;
 use crate::tree::{
     Cache, ClearState, Layout, LayoutInput, LayoutOutput, LayoutPartialTree, NodeId, PrintTree, RoundTree, RunMode,
@@ -294,10 +294,13 @@ where
             let padding = style.padding.clone().resolve_or_zero(inputs.parent_size.width, |_, _| 0.0);
             let border = style.border.clone().resolve_or_zero(inputs.parent_size.width, |_, _| 0.0);
             let edges = padding + border;
-            if let (Some(width), None) = (contained.width, inputs.known_dimensions.width) {
+            // (Only where its own size is auto: a length or percentage, which
+            // may yet resolve, stays.)
+            let auto = |size: Dimension| size.into_raw().is_auto();
+            if let (Some(width), None, true) = (contained.width, inputs.known_dimensions.width, auto(style.size.width)) {
                 inputs.known_dimensions.width = Some(width + edges.horizontal_axis_sum());
             }
-            if let (Some(height), None) = (contained.height, inputs.known_dimensions.height) {
+            if let (Some(height), None, true) = (contained.height, inputs.known_dimensions.height, auto(style.size.height)) {
                 inputs.known_dimensions.height = Some(height + edges.vertical_axis_sum());
             }
         }
