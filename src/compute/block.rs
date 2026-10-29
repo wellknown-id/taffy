@@ -10,8 +10,8 @@ use crate::util::sys::Vec;
 use crate::util::MaybeMath;
 use crate::util::{MaybeResolve, ResolveOrZero};
 use crate::{
-    BlockContainerStyle, BlockItemStyle, BoxGenerationMode, BoxSizing, Direction, LayoutBlockContainer, RequestedAxis,
-    TextAlign,
+    AlignContent, BlockAlignContent, BlockContainerStyle, BlockItemStyle, BoxGenerationMode, BoxSizing, Direction,
+    LayoutBlockContainer, RequestedAxis, TextAlign,
 };
 
 #[cfg(feature = "float_layout")]
@@ -245,6 +245,8 @@ struct BlockItem {
     static_position: Point<f32>,
     /// Whether margins can be collapsed through this item
     can_be_collapsed_through: bool,
+    /// The item's final layout (an in-flow or floated item's, once laid out)
+    final_layout: Option<Layout>,
 }
 
 /// Computes the layout of [`LayoutPartialTree`] according to the block layout algorithm
@@ -260,6 +262,9 @@ pub fn compute_block_layout(
     // Pull these out earlier to avoid borrowing issues
     let overflow = style.overflow();
     let is_scroll_container = overflow.x.is_scroll_container() || overflow.y.is_scroll_container();
+    // (Aligned content makes a block formatting context root.)
+    let establishes_bfc =
+        is_scroll_container || style.block_align_content().is_some() || style.is_formatting_context_root();
     let aspect_ratio = style.aspect_ratio();
     let padding = style.padding().resolve_or_zero(parent_size.width, |val, basis| tree.calc(val, basis));
     let border = style.border().resolve_or_zero(parent_size.width, |val, basis| tree.calc(val, basis));
@@ -310,7 +315,7 @@ pub fn compute_block_layout(
     // Unwrap the block formatting context if one was passed, or else create a new one
     debug_log!("BLOCK");
     match block_ctx {
-        Some(inherited_bfc) if !is_scroll_container => compute_inner(
+        Some(inherited_bfc) if !establishes_bfc => compute_inner(
             tree,
             node_id,
             LayoutInput { known_dimensions: styled_based_known_dimensions, ..inputs },
@@ -391,16 +396,20 @@ fn compute_inner(
 
     let overflow = style.overflow();
     let is_scroll_container = overflow.x.is_scroll_container() || overflow.y.is_scroll_container();
+    let block_align_content = style.block_align_content();
+    let independent = block_align_content.is_some() || style.is_formatting_context_root();
 
     // Determine margin collapsing behaviour
     let own_margins_collapse_with_children = Line {
         start: vertical_margins_are_collapsible.start
             && !is_scroll_container
+            && !independent
             && style.position() == Position::Relative
             && padding.top == 0.0
             && border.top == 0.0,
         end: vertical_margins_are_collapsible.end
             && !is_scroll_container
+            && !independent
             && style.position() == Position::Relative
             && padding.bottom == 0.0
             && border.bottom == 0.0
@@ -409,6 +418,7 @@ fn compute_inner(
     let has_styles_preventing_being_collapsed_through = !style.is_block()
         || block_ctx.is_bfc_root()
         || is_scroll_container
+        || independent
         || style.position() == Position::Absolute
         || padding.top > 0.0
         || padding.bottom > 0.0
@@ -446,7 +456,7 @@ fn compute_inner(
     let (
         inflow_content_size,
         mut intrinsic_outer_height,
-        first_baseline,
+        mut first_baseline,
         first_child_top_margin_set,
         last_child_bottom_margin_set,
     ) = perform_final_layout_on_in_flow_children(
@@ -477,6 +487,28 @@ fn compute_inner(
     // Short-circuit if computing size
     if run_mode == RunMode::ComputeSize {
         return LayoutOutput::from_outer_size(final_outer_size);
+    }
+
+    // https://drafts.csswg.org/css-align-3/#distribution-block: aligned content moves (in-flow
+    // and floated boxes, and absolutely positioned boxes' static positions) by the free space.
+    if let Some(BlockAlignContent { alignment, unsafe_overflow }) = block_align_content {
+        let free_space = container_outer_height - intrinsic_outer_height;
+        let shift = match alignment {
+            AlignContent::Center | AlignContent::SpaceAround | AlignContent::SpaceEvenly => free_space / 2.0,
+            AlignContent::End | AlignContent::FlexEnd => free_space,
+            _ => 0.0,
+        };
+        let shift = if free_space < 0.0 && !unsafe_overflow { 0.0 } else { shift };
+        if shift != 0.0 {
+            for item in items.iter_mut() {
+                item.static_position.y += shift;
+                if let Some(mut layout) = item.final_layout {
+                    layout.location.y += shift;
+                    tree.set_unrounded_layout(item.node_id, &layout);
+                }
+            }
+            first_baseline = first_baseline.map(|baseline| baseline + shift);
+        }
     }
 
     // 4. Layout absolutely positioned children
@@ -634,6 +666,7 @@ fn generate_item_list(
                 // Fields to be computed later (for now we initialise with dummy values)
                 computed_size: Size::zero(),
                 static_position: Point::zero(),
+                final_layout: None,
                 can_be_collapsed_through: false,
             }
         })
@@ -794,20 +827,19 @@ fn perform_final_layout_on_in_flow_children(
                 // println!("BLOCK FLOATED BOX ({:?}) {:?}", item.node_id, float_direction);
                 // println!("w:{} h:{} x:{}, y:{}", margin_box.width, margin_box.height, location.x, location.y);
 
-                tree.set_unrounded_layout(
-                    item.node_id,
-                    &Layout {
-                        order: item.order,
-                        size: item_layout.size,
-                        #[cfg(feature = "content_size")]
-                        content_size: item_layout.content_size,
-                        scrollbar_size,
-                        location,
-                        padding: item.padding,
-                        border: item.border,
-                        margin: item_non_auto_margin,
-                    },
-                );
+                let layout = Layout {
+                    order: item.order,
+                    size: item_layout.size,
+                    #[cfg(feature = "content_size")]
+                    content_size: item_layout.content_size,
+                    scrollbar_size,
+                    location,
+                    padding: item.padding,
+                    border: item.border,
+                    margin: item_non_auto_margin,
+                };
+                tree.set_unrounded_layout(item.node_id, &layout);
+                item.final_layout = Some(layout);
 
                 #[cfg(feature = "content_size")]
                 {
@@ -1064,20 +1096,19 @@ fn perform_final_layout_on_in_flow_children(
                 }
             }
 
-            tree.set_unrounded_layout(
-                item.node_id,
-                &Layout {
-                    order: item.order,
-                    size: item_layout.size,
-                    #[cfg(feature = "content_size")]
-                    content_size: item_layout.content_size,
-                    scrollbar_size,
-                    location,
-                    padding: item.padding,
-                    border: item.border,
-                    margin: resolved_margin,
-                },
-            );
+            let layout = Layout {
+                order: item.order,
+                size: item_layout.size,
+                #[cfg(feature = "content_size")]
+                content_size: item_layout.content_size,
+                scrollbar_size,
+                location,
+                padding: item.padding,
+                border: item.border,
+                margin: resolved_margin,
+            };
+            tree.set_unrounded_layout(item.node_id, &layout);
+            item.final_layout = Some(layout);
 
             if first_baseline.is_none() {
                 first_baseline = Some(location.y + item_layout.first_baselines.y.unwrap_or(item_layout.size.height));

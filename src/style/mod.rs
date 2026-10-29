@@ -20,7 +20,7 @@ pub use self::dimension::{Dimension, LengthPercentage, LengthPercentageAuto};
 use crate::sys::DefaultCheapStr;
 
 #[cfg(feature = "block_layout")]
-pub use self::block::{BlockContainerStyle, BlockItemStyle, TextAlign};
+pub use self::block::{BlockAlignContent, BlockContainerStyle, BlockItemStyle, TextAlign};
 #[cfg(feature = "flexbox")]
 pub use self::flex::{FlexDirection, FlexWrap, FlexboxContainerStyle, FlexboxItemStyle};
 #[cfg(feature = "float_layout")]
@@ -566,6 +566,12 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     /// How items elements should aligned in the inline axis
     #[cfg(feature = "block_layout")]
     pub text_align: TextAlign,
+    /// A block container's content alignment in its block axis (`align-content`)
+    #[cfg(feature = "block_layout")]
+    pub block_align_content: Option<BlockAlignContent>,
+    /// Whether a block container establishes an independent formatting context
+    #[cfg(feature = "block_layout")]
+    pub formatting_context_root: bool,
 
     // Flexbox container properties
     /// Which direction does the main axis flow in?
@@ -686,6 +692,10 @@ impl<S: CheapCloneStr> Style<S> {
         // Block
         #[cfg(feature = "block_layout")]
         text_align: TextAlign::Auto,
+        #[cfg(feature = "block_layout")]
+        block_align_content: None,
+        #[cfg(feature = "block_layout")]
+        formatting_context_root: false,
         // Flexbox
         #[cfg(feature = "flexbox")]
         flex_direction: FlexDirection::Row,
@@ -877,6 +887,14 @@ impl<S: CheapCloneStr> BlockContainerStyle for Style<S> {
     fn text_align(&self) -> TextAlign {
         self.text_align
     }
+    #[inline(always)]
+    fn block_align_content(&self) -> Option<BlockAlignContent> {
+        self.block_align_content
+    }
+    #[inline(always)]
+    fn is_formatting_context_root(&self) -> bool {
+        self.formatting_context_root
+    }
 }
 
 #[cfg(feature = "block_layout")]
@@ -884,6 +902,14 @@ impl<T: BlockContainerStyle> BlockContainerStyle for &'_ T {
     #[inline(always)]
     fn text_align(&self) -> TextAlign {
         (*self).text_align()
+    }
+    #[inline(always)]
+    fn block_align_content(&self) -> Option<BlockAlignContent> {
+        (*self).block_align_content()
+    }
+    #[inline(always)]
+    fn is_formatting_context_root(&self) -> bool {
+        (*self).is_formatting_context_root()
     }
 }
 
@@ -1388,6 +1414,10 @@ mod tests {
             gap: Size::zero(),
             #[cfg(feature = "block_layout")]
             text_align: Default::default(),
+            #[cfg(feature = "block_layout")]
+            block_align_content: None,
+            #[cfg(feature = "block_layout")]
+            formatting_context_root: false,
             #[cfg(feature = "flexbox")]
             flex_grow: 0.0,
             #[cfg(feature = "flexbox")]
@@ -1492,12 +1522,12 @@ mod tests {
         assert_type_size::<GridTemplateComponent<String>>(56);
         assert_type_size::<GridPlacement<String>>(32);
         assert_type_size::<Line<GridPlacement<String>>>(64);
-        assert_type_size::<Style<String>>(584);
+        assert_type_size::<Style<String>>(592);
 
         // String-type dependent (Arc<str>)
         assert_type_size::<GridTemplateComponent<Arc<str>>>(56);
         assert_type_size::<GridPlacement<Arc<str>>>(24);
         assert_type_size::<Line<GridPlacement<Arc<str>>>>(48);
-        assert_type_size::<Style<Arc<str>>>(552);
+        assert_type_size::<Style<Arc<str>>>(560);
     }
 }

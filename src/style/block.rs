@@ -1,5 +1,5 @@
 //! Style types for Block layout
-use crate::{CoreStyle, Style};
+use crate::{AlignContent, CoreStyle, Style};
 
 /// The set of styles required for a Block layout container
 pub trait BlockContainerStyle: CoreStyle {
@@ -8,6 +8,31 @@ pub trait BlockContainerStyle: CoreStyle {
     fn text_align(&self) -> TextAlign {
         Style::<Self::CustomIdent>::DEFAULT.text_align
     }
+
+    /// Whether the container establishes an independent formatting context (a `flow-root`, say), so
+    /// its margins don't collapse with its children's
+    #[inline(always)]
+    fn is_formatting_context_root(&self) -> bool {
+        false
+    }
+
+    /// How the container's content is aligned in its block axis (`None` for `normal`)
+    #[inline(always)]
+    fn block_align_content(&self) -> Option<BlockAlignContent> {
+        None
+    }
+}
+
+/// A block container's `align-content` other than `normal`, which aligns its content in its block axis
+/// and makes it a block formatting context root.
+/// <https://drafts.csswg.org/css-align-3/#distribution-block>
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct BlockAlignContent {
+    /// The alignment (distributions fall back to their positions; baselines to start or end)
+    pub alignment: AlignContent,
+    /// Whether overflowing content is still aligned (`unsafe`); otherwise it stays at the start
+    pub unsafe_overflow: bool,
 }
 
 /// The set of styles required for a Block layout item (child of a Block container)
