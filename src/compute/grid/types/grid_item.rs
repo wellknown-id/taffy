@@ -10,7 +10,7 @@ use crate::{BoxSizing, GridItemStyle, LengthPercentage};
 use core::ops::Range;
 
 /// Represents a single grid item
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(in super::super) struct GridItem {
     /// The id of the node that this item represents
     pub node: NodeId,
@@ -85,6 +85,16 @@ pub(in super::super) struct GridItem {
     /// Cache for the max-content size
     pub max_content_contribution_cache: Size<Option<f32>>,
 
+    /// In a grid lanes container: an auto-placed item, whose lane is chosen when it's stacked
+    pub lanes_auto: bool,
+    /// In a grid lanes container: a copy of an auto-placed item in one of the other lanes it could
+    /// take, which contributes to track sizing but isn't laid out
+    pub lanes_virtual: bool,
+    /// In a grid lanes container: the item's offset and (margin box) size in the stacking axis
+    pub lanes_offset: f32,
+    /// See `lanes_offset`
+    pub lanes_size: f32,
+
     /// Final y position. Used to compute baseline alignment for the container.
     pub y_position: f32,
     /// Final height. Used to compute baseline alignment for the container.
@@ -131,6 +141,10 @@ impl GridItem {
             min_content_contribution_cache: Size::NONE,
             max_content_contribution_cache: Size::NONE,
             minimum_contribution_cache: Size::NONE,
+            lanes_auto: false,
+            lanes_virtual: false,
+            lanes_offset: 0.0,
+            lanes_size: 0.0,
             y_position: 0.0,
             height: 0.0,
         }
@@ -229,7 +243,7 @@ impl GridItem {
     /// Compute the known_dimensions to be passed to the child sizing functions
     /// The key thing that is being done here is applying stretch alignment, which is necessary to
     /// allow percentage sizes further down the tree to resolve properly in some cases
-    fn known_dimensions(
+    pub fn known_dimensions(
         &self,
         tree: &mut impl LayoutPartialTree,
         inner_node_size: Size<Option<f32>>,
@@ -522,7 +536,8 @@ impl GridItem {
 
                 // if it spans more than one track in that axis, none of those tracks are flexible
                 let only_span_one_track = item_axis_tracks.len() == 1;
-                let spans_a_flexible_track = item_axis_tracks.iter().any(|track| track.max_track_sizing_function.is_fr());
+                let spans_a_flexible_track =
+                    item_axis_tracks.iter().any(|track| track.max_track_sizing_function.is_fr());
 
                 let use_content_based_minimum =
                     spans_auto_min_track && (only_span_one_track || !spans_a_flexible_track);

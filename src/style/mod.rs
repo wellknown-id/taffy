@@ -28,7 +28,7 @@ pub use self::float::{Clear, Float, FloatDirection};
 #[cfg(feature = "grid")]
 pub use self::grid::{
     GenericGridPlacement, GenericGridTemplateComponent, GenericRepetition, GridAutoFlow, GridAutoTracks,
-    GridContainerStyle, GridItemStyle, GridPlacement, GridTemplateComponent, GridTemplateRepetition,
+    GridContainerStyle, GridItemStyle, GridLanes, GridPlacement, GridTemplateComponent, GridTemplateRepetition,
     GridTemplateTracks, MaxTrackSizingFunction, MinTrackSizingFunction, RepetitionCount, TrackSizingFunction,
 };
 #[cfg(feature = "grid")]
@@ -606,6 +606,9 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     /// Controls how items get placed into the grid for auto-placed items
     #[cfg(feature = "grid")]
     pub grid_auto_flow: GridAutoFlow,
+    /// The lanes of a grid lanes container (`None` for a grid)
+    #[cfg(feature = "grid")]
+    pub grid_lanes: Option<GridLanes>,
 
     // Grid container named properties
     /// Defines the rectangular grid areas
@@ -711,6 +714,8 @@ impl<S: CheapCloneStr> Style<S> {
         grid_auto_columns: GridTrackVec::new(),
         #[cfg(feature = "grid")]
         grid_auto_flow: GridAutoFlow::Row,
+        #[cfg(feature = "grid")]
+        grid_lanes: None,
         #[cfg(feature = "grid")]
         grid_row: Line { start: GridPlacement::<S>::Auto, end: GridPlacement::<S>::Auto },
         #[cfg(feature = "grid")]
@@ -1098,6 +1103,10 @@ impl<S: CheapCloneStr> GridContainerStyle for Style<S> {
         self.grid_auto_flow
     }
     #[inline(always)]
+    fn grid_lanes(&self) -> Option<GridLanes> {
+        self.grid_lanes
+    }
+    #[inline(always)]
     fn gap(&self) -> Size<LengthPercentage> {
         self.gap
     }
@@ -1216,6 +1225,10 @@ impl<T: GridContainerStyle> GridContainerStyle for &'_ T {
     #[inline(always)]
     fn grid_auto_flow(&self) -> GridAutoFlow {
         (*self).grid_auto_flow()
+    }
+    #[inline(always)]
+    fn grid_lanes(&self) -> Option<GridLanes> {
+        (*self).grid_lanes()
     }
     #[inline(always)]
     fn gap(&self) -> Size<LengthPercentage> {
@@ -1404,6 +1417,8 @@ mod tests {
             #[cfg(feature = "grid")]
             grid_auto_flow: Default::default(),
             #[cfg(feature = "grid")]
+            grid_lanes: None,
+            #[cfg(feature = "grid")]
             grid_row: Line { start: GridPlacement::Auto, end: GridPlacement::Auto },
             #[cfg(feature = "grid")]
             grid_column: Line { start: GridPlacement::Auto, end: GridPlacement::Auto },
@@ -1477,12 +1492,12 @@ mod tests {
         assert_type_size::<GridTemplateComponent<String>>(56);
         assert_type_size::<GridPlacement<String>>(32);
         assert_type_size::<Line<GridPlacement<String>>>(64);
-        assert_type_size::<Style<String>>(568);
+        assert_type_size::<Style<String>>(584);
 
         // String-type dependent (Arc<str>)
         assert_type_size::<GridTemplateComponent<Arc<str>>>(56);
         assert_type_size::<GridPlacement<Arc<str>>>(24);
         assert_type_size::<Line<GridPlacement<Arc<str>>>>(48);
-        assert_type_size::<Style<Arc<str>>>(536);
+        assert_type_size::<Style<Arc<str>>>(552);
     }
 }

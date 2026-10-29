@@ -193,6 +193,12 @@ pub trait GridContainerStyle: CoreStyle {
         Style::<Self::CustomIdent>::DEFAULT.gap
     }
 
+    /// The lanes of a grid lanes container (`None` for a grid)
+    #[inline(always)]
+    fn grid_lanes(&self) -> Option<GridLanes> {
+        None
+    }
+
     // Alignment properties
 
     /// How should content contained within this item be aligned in the cross/block axis
@@ -299,6 +305,24 @@ pub trait GridItemStyle: CoreStyle {
             AbsoluteAxis::Vertical => self.grid_row(),
         }
     }
+}
+
+/// A grid lanes container's lanes (CSS Grid Lanes, <https://drafts.csswg.org/css-grid-3/>): the
+/// grid's tracks in one axis, with items stacked along the other axis in whichever lane leaves
+/// them closest to the start.
+#[derive(Copy, Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct GridLanes {
+    /// The axis the lanes' tracks are sized in (`Horizontal`: the columns are the lanes and
+    /// items stack vertically)
+    pub axis: AbsoluteAxis,
+    /// Items stack from the end of the stacking axis
+    pub fill_reverse: bool,
+    /// Items are placed in the last of the lanes that tie (rather than the first)
+    pub track_reverse: bool,
+    /// How much further along a lane can be and still count as tying with the shortest
+    /// (percentages are of the lanes axis' content box size; an infinite length is `infinite`)
+    pub tolerance: LengthPercentage,
 }
 
 /// Controls whether grid items are placed row-wise or column-wise. And whether the sparse or dense packing algorithm is used.

@@ -424,7 +424,11 @@ fn compute_preliminary(tree: &mut impl LayoutFlexboxContainer, node: NodeId, inp
         flex_lines[0]
             .items
             .iter()
-            .find(|item| constants.is_column || item.align_self == AlignSelf::Baseline || item.align_self == AlignSelf::LastBaseline)
+            .find(|item| {
+                constants.is_column
+                    || item.align_self == AlignSelf::Baseline
+                    || item.align_self == AlignSelf::LastBaseline
+            })
             .or_else(|| flex_lines[0].items.iter().next())
             .map(|child| child.baseline)
     };
@@ -447,7 +451,10 @@ fn compute_constants(
     let dir = style.flex_direction();
     let is_row = dir.is_row();
     let is_column = dir.is_column();
-    let is_wrap = matches!(style.flex_wrap(), FlexWrap::Wrap | FlexWrap::WrapReverse | FlexWrap::Balance | FlexWrap::WrapReverseBalance);
+    let is_wrap = matches!(
+        style.flex_wrap(),
+        FlexWrap::Wrap | FlexWrap::WrapReverse | FlexWrap::Balance | FlexWrap::WrapReverseBalance
+    );
     let is_wrap_reverse = matches!(style.flex_wrap(), FlexWrap::WrapReverse | FlexWrap::WrapReverseBalance);
     let is_balance = matches!(style.flex_wrap(), FlexWrap::Balance | FlexWrap::WrapReverseBalance);
 
@@ -589,9 +596,7 @@ fn generate_anonymous_flex_items(
                     None => constants.align_items_is_safe,
                 },
                 cross_size_is_auto: child_style.size().cross(constants.dir).is_auto(),
-                main_size_is_percent_based: {
-                    child_style.size().main(constants.dir).into_raw().uses_percentage()
-                },
+                main_size_is_percent_based: { child_style.size().main(constants.dir).into_raw().uses_percentage() },
                 specified_size_suggestion: {
                     let raw = child_style.size().main(constants.dir).into_raw();
                     if raw.uses_percentage() {
@@ -607,7 +612,8 @@ fn generate_anonymous_flex_items(
                     }
                 },
                 flex_basis_is_indefinite_percent: false,
-                box_sizing: child_style.box_sizing(),                overflow: child_style.overflow(),
+                box_sizing: child_style.box_sizing(),
+                overflow: child_style.overflow(),
                 scrollbar_width: child_style.scrollbar_width(),
                 flex_grow: child_style.flex_grow(),
                 flex_shrink: child_style.flex_shrink(),
@@ -761,10 +767,11 @@ fn determine_flex_base_size(
                 // Clamp cross size by min/max constraints before aspect-ratio transfer,
                 // so that the derived main size reflects cross-axis clamping
                 // (e.g. max-width on the cross axis should affect the main size).
-                let content_cross = child_known_dimensions.cross(dir).unwrap().maybe_clamp(
-                    child.min_size.cross(dir),
-                    child.max_size_ignoring_aspect_ratio.cross(dir),
-                ) - pb_cross;
+                let content_cross = child_known_dimensions
+                    .cross(dir)
+                    .unwrap()
+                    .maybe_clamp(child.min_size.cross(dir), child.max_size_ignoring_aspect_ratio.cross(dir))
+                    - pb_cross;
                 // Convert cross→main using aspect_ratio (ratio = width/height):
                 //   cross=width → main=width/ratio = height  (column flex, cross_axis is Horizontal)
                 //   cross=height → main=height*ratio = width  (row flex, cross_axis is Vertical)
@@ -797,24 +804,23 @@ fn determine_flex_base_size(
         drop(child_style);
 
         if is_min_content || is_max_content {
-            let intrinsic_available_space = if is_min_content {
-                AvailableSpace::MinContent
-            } else {
-                AvailableSpace::MaxContent
-            };
+            let intrinsic_available_space =
+                if is_min_content { AvailableSpace::MinContent } else { AvailableSpace::MaxContent };
             child.size.set_main(
                 dir,
-                Some(tree.measure_child_size(
-                    child.node,
-                    child_known_dimensions,
-                    child_parent_size,
-                    Size::MAX_CONTENT
-                        .with_main(dir, intrinsic_available_space)
-                        .with_cross(dir, cross_axis_available_space),
-                    SizingMode::ContentSize,
-                    dir.main_axis(),
-                    Line::FALSE,
-                )),
+                Some(
+                    tree.measure_child_size(
+                        child.node,
+                        child_known_dimensions,
+                        child_parent_size,
+                        Size::MAX_CONTENT
+                            .with_main(dir, intrinsic_available_space)
+                            .with_cross(dir, cross_axis_available_space),
+                        SizingMode::ContentSize,
+                        dir.main_axis(),
+                        Line::FALSE,
+                    ),
+                ),
             );
         }
 
@@ -1043,10 +1049,10 @@ fn collect_flex_lines<'a>(
                 let counts: Vec<usize> = if is_balance && greedy_counts.len() > 1 {
                     let total_items = flex_items.len();
                     let num_lines = greedy_counts.len();
-                    let sum_sizes: f32 = flex_items.iter()
-                        .map(|item| item.hypothetical_outer_size.main(constants.dir))
-                        .sum();
-                    let target = (sum_sizes + (total_items as f32 - num_lines as f32) * main_axis_gap) / num_lines as f32;
+                    let sum_sizes: f32 =
+                        flex_items.iter().map(|item| item.hypothetical_outer_size.main(constants.dir)).sum();
+                    let target =
+                        (sum_sizes + (total_items as f32 - num_lines as f32) * main_axis_gap) / num_lines as f32;
 
                     let mut balanced = Vec::with_capacity(num_lines);
                     let mut idx = 0;
@@ -1060,10 +1066,14 @@ fn collect_flex_lines<'a>(
                             let gap = if count == 0 { 0.0 } else { main_axis_gap };
                             let new_size = line_size + child.hypothetical_outer_size.main(constants.dir) + gap;
 
-                            if new_size > main_axis_available_space { break; }
+                            if new_size > main_axis_available_space {
+                                break;
+                            }
 
                             if is_last {
-                                count += 1; line_size = new_size; continue;
+                                count += 1;
+                                line_size = new_size;
+                                continue;
                             }
 
                             let should_add = if line_size >= target {
@@ -1072,10 +1082,17 @@ fn collect_flex_lines<'a>(
                                 (new_size - target).abs() <= (line_size - target).abs()
                             };
 
-                            if should_add { count += 1; line_size = new_size; } else { break; }
+                            if should_add {
+                                count += 1;
+                                line_size = new_size;
+                            } else {
+                                break;
+                            }
                         }
 
-                        if count == 0 { count = 1; }
+                        if count == 0 {
+                            count = 1;
+                        }
                         balanced.push(count);
                         idx += count;
                     }
@@ -1092,11 +1109,18 @@ fn collect_flex_lines<'a>(
                                 let g = if j == 0 { 0.0 } else { main_axis_gap };
                                 ll += child.hypothetical_outer_size.main(constants.dir) + g;
                             }
-                            if ll > main_axis_available_space { ok = false; break; }
+                            if ll > main_axis_available_space {
+                                ok = false;
+                                break;
+                            }
                             verify_idx += count;
                         }
                     }
-                    if ok { balanced } else { greedy_counts }
+                    if ok {
+                        balanced
+                    } else {
+                        greedy_counts
+                    }
                 } else {
                     greedy_counts
                 };
@@ -1617,9 +1641,7 @@ fn determine_hypothetical_cross_size(
                 AbsoluteAxis::Horizontal => preferred_main * aspect_ratio,
                 AbsoluteAxis::Vertical => preferred_main / aspect_ratio,
             };
-            preferred_cross
-                .maybe_clamp(min_cross, max_cross)
-                .max(child_inner_cross)
+            preferred_cross.maybe_clamp(min_cross, max_cross).max(child_inner_cross)
         } else {
             child_inner_cross
         };
@@ -2342,8 +2364,8 @@ fn final_layout_pass(
         if is_column {
             // wrap-reverse for columns: reverses the cross axis
             let start = constants.content_box_inset.cross_start(constants.dir);
-            let end = constants.container_size.cross(constants.dir)
-                - constants.content_box_inset.cross_end(constants.dir);
+            let end =
+                constants.container_size.cross(constants.dir) - constants.content_box_inset.cross_end(constants.dir);
             if is_rtl {
                 // RTL + wrap-reverse: RTL reverse + wrap-reverse = LTR (normal)
                 (start, false)
@@ -2353,14 +2375,13 @@ fn final_layout_pass(
             }
         } else {
             // wrap-reverse for rows: cross axis goes bottom-to-top
-            let end = constants.container_size.cross(constants.dir)
-                - constants.content_box_inset.cross_end(constants.dir);
+            let end =
+                constants.container_size.cross(constants.dir) - constants.content_box_inset.cross_end(constants.dir);
             (end, true)
         }
     } else if is_column && is_rtl {
         // RTL column (no wrap-reverse): cross axis goes right-to-left
-        let end = constants.container_size.cross(constants.dir)
-            - constants.content_box_inset.cross_end(constants.dir);
+        let end = constants.container_size.cross(constants.dir) - constants.content_box_inset.cross_end(constants.dir);
         (end, true)
     } else {
         // Normal direction

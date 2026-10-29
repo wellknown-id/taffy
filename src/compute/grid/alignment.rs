@@ -124,7 +124,7 @@ pub(super) fn align_and_position_item(
     // Note: if the child has a preferred aspect ratio but neither width or height are set, then the width is stretched
     // and the then height is calculated from the width according the aspect ratio
     // See: https://www.w3.org/TR/css-grid-1/#grid-item-sizing
-    // 
+    //
     // Stretch only applies when the preferred size (width/height) is auto.
     // Non-auto values like max-content, min-content, or fixed lengths suppress stretch.
     // See: https://www.w3.org/TR/css-grid-1/#grid-item-sizing
@@ -157,7 +157,8 @@ pub(super) fn align_and_position_item(
                 && (!width_is_auto || (aspect_ratio.is_some() && width_is_auto && !height_is_auto))
             {
                 AlignSelf::Start
-            } else if explicit_align_horizontal.is_none() && aspect_ratio.is_some() && opposite_axis_is_explicit_stretch {
+            } else if explicit_align_horizontal.is_none() && aspect_ratio.is_some() && opposite_axis_is_explicit_stretch
+            {
                 AlignSelf::Start
             } else {
                 align_horizontal
@@ -433,11 +434,8 @@ pub(super) fn align_item_within_area(
     let aligned_end = aligned_start + resolved_size + resolved_margin.end;
     let overflow_start = aligned_start < grid_area.start;
     let overflow_end = aligned_end > grid_area.end;
-    let safe_fallback_offset = if is_safe && (overflow_start || overflow_end) {
-        resolved_margin.start
-    } else {
-        alignment_based_offset
-    };
+    let safe_fallback_offset =
+        if is_safe && (overflow_start || overflow_end) { resolved_margin.start } else { alignment_based_offset };
 
     let offset_within_area = if position == Position::Absolute {
         match (inset.start, inset.end) {

@@ -449,19 +449,18 @@ fn compute_inner(
         first_baseline,
         first_child_top_margin_set,
         last_child_bottom_margin_set,
-    ) =
-        perform_final_layout_on_in_flow_children(
-            tree,
-            &mut items,
-            container_outer_width,
-            container_percentage_resolution_height,
-            content_box_inset,
-            resolved_content_box_inset,
-            text_align,
-            direction,
-            own_margins_collapse_with_children,
-            block_ctx,
-        );
+    ) = perform_final_layout_on_in_flow_children(
+        tree,
+        &mut items,
+        container_outer_width,
+        container_percentage_resolution_height,
+        content_box_inset,
+        resolved_content_box_inset,
+        text_align,
+        direction,
+        own_margins_collapse_with_children,
+        block_ctx,
+    );
 
     // Root BFCs contain floats
     #[cfg(feature = "float_layout")]
@@ -524,10 +523,7 @@ fn compute_inner(
         size: final_outer_size,
         #[cfg(feature = "content_size")]
         content_size,
-        first_baselines: Point {
-            x: None,
-            y: first_baseline,
-        },
+        first_baselines: Point { x: None, y: first_baseline },
         top_margin: if own_margins_collapse_with_children.start {
             first_child_top_margin_set
         } else {
@@ -973,13 +969,10 @@ fn perform_final_layout_on_in_flow_children(
             };
 
             // Resolve item inset
-            let inset = item.inset.zip_size(
-                Size {
-                    width: container_inner_width,
-                    height: final_size.height,
-                },
-                |p, s| p.maybe_resolve(s, |val, basis| tree.calc(val, basis)),
-            );
+            let inset =
+                item.inset.zip_size(Size { width: container_inner_width, height: final_size.height }, |p, s| {
+                    p.maybe_resolve(s, |val, basis| tree.calc(val, basis))
+                });
             let inset_offset = Point {
                 x: if direction.is_rtl() {
                     inset.right.map(|x| -x).or(inset.left).unwrap_or(0.0)

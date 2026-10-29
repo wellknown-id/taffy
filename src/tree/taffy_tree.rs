@@ -15,8 +15,8 @@ use crate::tree::{
     TraversePartialTree, TraverseTree,
 };
 use crate::util::debug::{debug_log, debug_log_node};
-use crate::util::ResolveOrZero;
 use crate::util::sys::{new_vec_with_capacity, ChildrenVec, Vec};
+use crate::util::ResolveOrZero;
 
 use crate::compute::{
     compute_cached_layout, compute_hidden_layout, compute_leaf_layout, compute_root_layout, round_layout,
@@ -297,10 +297,13 @@ where
             // (Only where its own size is auto: a length or percentage, which
             // may yet resolve, stays.)
             let auto = |size: Dimension| size.into_raw().is_auto();
-            if let (Some(width), None, true) = (contained.width, inputs.known_dimensions.width, auto(style.size.width)) {
+            if let (Some(width), None, true) = (contained.width, inputs.known_dimensions.width, auto(style.size.width))
+            {
                 inputs.known_dimensions.width = Some(width + edges.horizontal_axis_sum());
             }
-            if let (Some(height), None, true) = (contained.height, inputs.known_dimensions.height, auto(style.size.height)) {
+            if let (Some(height), None, true) =
+                (contained.height, inputs.known_dimensions.height, auto(style.size.height))
+            {
                 inputs.known_dimensions.height = Some(height + edges.vertical_axis_sum());
             }
         }
@@ -953,9 +956,9 @@ mod tests {
 
     use super::*;
     use crate::style::{Dimension, Display, FlexDirection, FlexWrap, Position};
-    use crate::Rect;
     use crate::style_helpers::*;
     use crate::util::sys;
+    use crate::Rect;
 
     fn size_measure_function(
         known_dimensions: Size<Option<f32>>,
@@ -1098,10 +1101,7 @@ mod tests {
         let child = taffy
             .new_leaf(Style {
                 position: Position::Relative,
-                inset: Rect {
-                    top: percent(-1.0),
-                    ..Rect::auto()
-                },
+                inset: Rect { top: percent(-1.0), ..Rect::auto() },
                 size: Size::from_lengths(100.0, 100.0),
                 ..Default::default()
             })
@@ -1109,11 +1109,7 @@ mod tests {
 
         let parent = taffy
             .new_with_children(
-                Style {
-                    display: Display::Block,
-                    size: Size::from_lengths(100.0, 100.0),
-                    ..Default::default()
-                },
+                Style { display: Display::Block, size: Size::from_lengths(100.0, 100.0), ..Default::default() },
                 &[child],
             )
             .unwrap();
@@ -1441,66 +1437,42 @@ mod tests {
         let item1 = taffy
             .new_leaf(Style {
                 size: Size::from_lengths(100.0, 90.0),
-                margin: Rect {
-                    top: length(10.0),
-                    right: length(10.0),
-                    ..Rect::zero()
-                },
+                margin: Rect { top: length(10.0), right: length(10.0), ..Rect::zero() },
                 ..Default::default()
             })
             .unwrap();
         let item2 = taffy
             .new_leaf(Style {
                 size: Size::from_lengths(100.0, 90.0),
-                margin: Rect {
-                    top: length(10.0),
-                    right: length(10.0),
-                    ..Rect::zero()
-                },
+                margin: Rect { top: length(10.0), right: length(10.0), ..Rect::zero() },
                 ..Default::default()
             })
             .unwrap();
         let item3 = taffy
             .new_leaf(Style {
                 size: Size::from_lengths(100.0, 90.0),
-                margin: Rect {
-                    top: length(10.0),
-                    right: length(10.0),
-                    ..Rect::zero()
-                },
+                margin: Rect { top: length(10.0), right: length(10.0), ..Rect::zero() },
                 ..Default::default()
             })
             .unwrap();
         let item4 = taffy
             .new_leaf(Style {
                 size: Size::from_lengths(100.0, 140.0),
-                margin: Rect {
-                    top: length(10.0),
-                    right: length(10.0),
-                    ..Rect::zero()
-                },
+                margin: Rect { top: length(10.0), right: length(10.0), ..Rect::zero() },
                 ..Default::default()
             })
             .unwrap();
         let item5 = taffy
             .new_leaf(Style {
                 size: Size::from_lengths(100.0, 140.0),
-                margin: Rect {
-                    top: length(10.0),
-                    right: length(10.0),
-                    ..Rect::zero()
-                },
+                margin: Rect { top: length(10.0), right: length(10.0), ..Rect::zero() },
                 ..Default::default()
             })
             .unwrap();
         let item6 = taffy
             .new_leaf(Style {
                 size: Size::from_lengths(100.0, 290.0),
-                margin: Rect {
-                    top: length(10.0),
-                    right: length(10.0),
-                    ..Rect::zero()
-                },
+                margin: Rect { top: length(10.0), right: length(10.0), ..Rect::zero() },
                 ..Default::default()
             })
             .unwrap();

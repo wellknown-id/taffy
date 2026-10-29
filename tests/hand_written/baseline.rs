@@ -6,40 +6,23 @@ fn nested_flex_container_exports_child_baseline_once() {
     let mut taffy = new_test_tree();
 
     let short = taffy
-        .new_leaf(Style {
-            size: Size { width: length(10.0), height: length(10.0) },
-            ..Default::default()
-        })
+        .new_leaf(Style { size: Size { width: length(10.0), height: length(10.0) }, ..Default::default() })
         .unwrap();
     let tall = taffy
-        .new_leaf(Style {
-            size: Size { width: length(10.0), height: length(20.0) },
-            ..Default::default()
-        })
+        .new_leaf(Style { size: Size { width: length(10.0), height: length(20.0) }, ..Default::default() })
         .unwrap();
     let nested = taffy
         .new_with_children(
-            Style {
-                display: Display::Flex,
-                align_items: Some(AlignItems::Baseline),
-                ..Default::default()
-            },
+            Style { display: Display::Flex, align_items: Some(AlignItems::Baseline), ..Default::default() },
             &[short, tall],
         )
         .unwrap();
     let sibling = taffy
-        .new_leaf(Style {
-            size: Size { width: length(10.0), height: length(20.0) },
-            ..Default::default()
-        })
+        .new_leaf(Style { size: Size { width: length(10.0), height: length(20.0) }, ..Default::default() })
         .unwrap();
     let root = taffy
         .new_with_children(
-            Style {
-                display: Display::Flex,
-                align_items: Some(AlignItems::Baseline),
-                ..Default::default()
-            },
+            Style { display: Display::Flex, align_items: Some(AlignItems::Baseline), ..Default::default() },
             &[nested, sibling],
         )
         .unwrap();
