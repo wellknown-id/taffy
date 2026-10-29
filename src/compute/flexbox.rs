@@ -2371,7 +2371,12 @@ fn final_layout_pass(
     // wrap-reverse: align-content gave the lines their offsets from the
     // physical start (the last line first), so they're laid out that way,
     // from the content box's physical start.
-    let from_physical_start = constants.is_wrap_reverse && cross_axis_reversed;
+    // (Overflowing lines keep going past the cross-start, as before: their
+    // overflow is on the unscrollable side.)
+    let lines_cross: f32 = flex_lines.iter().map(|line| line.cross_size).sum::<f32>()
+        + sum_axis_gaps(constants.gap.cross(constants.dir), flex_lines.len());
+    let fits = constants.inner_container_size.cross(constants.dir) >= lines_cross;
+    let from_physical_start = constants.is_wrap_reverse && cross_axis_reversed && fits;
     let (cross_start_pos, cross_axis_reversed) = if from_physical_start {
         (constants.content_box_inset.cross_start(constants.dir), false)
     } else {
