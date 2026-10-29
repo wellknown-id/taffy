@@ -502,6 +502,10 @@ pub struct Style<S: CheapCloneStr = DefaultCheapStr> {
     /// box's min-content and max-content contributions in that axis are this
     /// size plus its padding and border, whatever its children.
     pub contain_intrinsic_size: Size<Option<f32>>,
+    /// A box's first baseline, from the top of its content box, in place of
+    /// the one its layout finds (a leaf's text, which the embedder measures);
+    /// NaN gives it none (an orthogonal box's).
+    pub first_baseline: Option<f32>,
 
     // Spacing Properties
     /// How large should the margin be on each side?
@@ -648,6 +652,7 @@ impl<S: CheapCloneStr> Style<S> {
         max_size: Size::auto(),
         aspect_ratio: None,
         contain_intrinsic_size: Size { width: None, height: None },
+        first_baseline: None,
         #[cfg(any(feature = "flexbox", feature = "grid"))]
         gap: Size::zero(),
         // Alignment
@@ -1381,6 +1386,7 @@ mod tests {
             max_size: Size::auto(),
             aspect_ratio: Default::default(),
             contain_intrinsic_size: Size { width: None, height: None },
+            first_baseline: None,
             #[cfg(feature = "grid")]
             grid_template_rows: Default::default(),
             #[cfg(feature = "grid")]

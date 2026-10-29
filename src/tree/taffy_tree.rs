@@ -304,7 +304,7 @@ where
                 inputs.known_dimensions.height = Some(height + edges.vertical_axis_sum());
             }
         }
-        compute_cached_layout(self, node_id, inputs, |tree, node_id, inputs| {
+        let mut output = compute_cached_layout(self, node_id, inputs, |tree, node_id, inputs| {
             let display_mode = tree.taffy.nodes[node_id.into()].style.display;
             let has_children = tree.child_count(node_id) > 0;
 
@@ -331,7 +331,16 @@ where
                     compute_leaf_layout(inputs, style, |_, _| 0.0, measure_function)
                 }
             }
-        })
+        });
+        // The embedder's first baseline, below the padding and border (NaN:
+        // none, as for an orthogonal box).
+        let style = &self.taffy.nodes[node_id.into()].style;
+        if let Some(baseline) = style.first_baseline {
+            let padding = style.padding.clone().resolve_or_zero(inputs.parent_size.width, |_, _| 0.0);
+            let border = style.border.clone().resolve_or_zero(inputs.parent_size.width, |_, _| 0.0);
+            output.first_baselines.y = (!baseline.is_nan()).then(|| padding.top + border.top + baseline);
+        }
+        output
     }
 }
 
