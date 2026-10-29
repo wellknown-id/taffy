@@ -2368,6 +2368,15 @@ fn final_layout_pass(
         (start, false)
     };
 
+    // wrap-reverse: align-content gave the lines their offsets from the
+    // physical start (the last line first), so they're laid out that way,
+    // from the content box's physical start.
+    let from_physical_start = constants.is_wrap_reverse && cross_axis_reversed;
+    let (cross_start_pos, cross_axis_reversed) = if from_physical_start {
+        (constants.content_box_inset.cross_start(constants.dir), false)
+    } else {
+        (cross_start_pos, cross_axis_reversed)
+    };
     let mut total_offset_cross = cross_start_pos;
 
     #[cfg_attr(not(feature = "content_size"), allow(unused_mut))]
@@ -2375,7 +2384,9 @@ fn final_layout_pass(
 
     // For reversed cross axis, process lines in normal order and decrement the offset.
     // For normal cross axis, process lines in normal order and increment the offset.
-    for line in flex_lines.iter_mut() {
+    let lines: Vec<&mut FlexLine> =
+        if from_physical_start { flex_lines.iter_mut().rev().collect() } else { flex_lines.iter_mut().collect() };
+    for line in lines {
         calculate_layout_line(
             tree,
             line,
