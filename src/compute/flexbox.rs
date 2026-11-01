@@ -1661,10 +1661,19 @@ fn calculate_children_base_lines(
     flex_lines: &mut [FlexLine],
     constants: &AlgoConstants,
 ) {
-    // Only compute baselines for flex rows because we only support baseline alignment in the cross axis
-    // where that axis is also the inline axis
-    // TODO: this may need revisiting if/when we support vertical writing modes
+    // A column's items (whose inline axis is the cross axis) have no baseline
+    // there: theirs is synthesized from their border box's left edge, as
+    // engines do (they align by it from the line's left edge whichever its
+    // cross-start is). https://drafts.csswg.org/css-align-3/#synthesize-baseline
     if !constants.is_row {
+        for line in flex_lines {
+            if line.items.iter().filter(|child| child.align_self == AlignSelf::Baseline).count() <= 1 {
+                continue;
+            }
+            for child in line.items.iter_mut().filter(|child| child.align_self == AlignSelf::Baseline) {
+                child.baseline = child.margin.left;
+            }
+        }
         return;
     }
 
@@ -1952,6 +1961,22 @@ fn resolve_cross_axis_auto_margins(flex_lines: &mut [FlexLine], constants: &Algo
     for line in flex_lines {
         let line_cross_size = line.cross_size;
         let max_baseline: f32 = line.items.iter_mut().map(|child| child.baseline).fold(0.0, |acc, x| acc.max(x));
+        // In a wrap-reverse line, whose cross-start is its end, baselines
+        // align by their distance from that edge.
+        let max_reverse_baseline: f32 = line
+            .items
+            .iter()
+            .filter(|child| child.align_self == AlignSelf::Baseline)
+            .map(|child| child.outer_target_size.cross(constants.dir) - child.baseline)
+            .fold(0.0, f32::max);
+        // (A column's baseline group, aligned from the left, sits at its
+        // line's cross-start: the right, when that's reversed.)
+        let baseline_group_size: f32 = line
+            .items
+            .iter()
+            .filter(|child| child.align_self == AlignSelf::Baseline)
+            .map(|child| max_baseline - child.baseline + child.outer_target_size.cross(constants.dir))
+            .fold(0.0, f32::max);
 
         for child in line.items.iter_mut() {
             let free_space = line_cross_size - child.outer_target_size.cross(constants.dir);
@@ -1978,7 +2003,14 @@ fn resolve_cross_axis_auto_margins(flex_lines: &mut [FlexLine], constants: &Algo
                 }
             } else {
                 // 14. Align all flex items along the cross-axis.
-                child.offset_cross = align_flex_items_along_cross_axis(child, free_space, max_baseline, constants);
+                child.offset_cross = align_flex_items_along_cross_axis(
+                    child,
+                    free_space,
+                    max_baseline,
+                    max_reverse_baseline,
+                    baseline_group_size,
+                    constants,
+                );
             }
         }
     }
@@ -1995,6 +2027,8 @@ fn align_flex_items_along_cross_axis(
     child: &FlexItem,
     free_space: f32,
     max_baseline: f32,
+    max_reverse_baseline: f32,
+    baseline_group_size: f32,
     constants: &AlgoConstants,
 ) -> f32 {
     let cross_axis_should_reverse = constants.is_column && matches!(constants.layout_direction, Direction::Rtl);
@@ -2036,17 +2070,18 @@ fn align_flex_items_along_cross_axis(
         }
         AlignSelf::Center => free_space / 2.0,
         AlignSelf::Baseline => {
-            if constants.is_row {
-                max_baseline - child.baseline
+            // (Measured from the line's cross-start edge, which is its end
+            // in a wrap-reverse line or a right-to-left column.)
+            let reversed = constants.is_wrap_reverse ^ cross_axis_should_reverse;
+            if !constants.is_row {
+                let line_size = free_space + child.outer_target_size.cross(constants.dir);
+                let shift = if reversed { line_size - baseline_group_size } else { 0.0 };
+                max_baseline - child.baseline + shift
+            } else if reversed {
+                let reverse_baseline = child.outer_target_size.cross(constants.dir) - child.baseline;
+                free_space - (max_reverse_baseline - reverse_baseline)
             } else {
-                // Until we support vertical writing modes, baseline alignment only makes sense if
-                // the constants.direction is row, so we treat it as flex-start alignment in columns.
-                let baseline_column_should_reverse = cross_axis_should_reverse && !constants.is_wrap;
-                if constants.is_wrap_reverse ^ baseline_column_should_reverse {
-                    free_space
-                } else {
-                    0.0
-                }
+                max_baseline - child.baseline
             }
         }
         AlignSelf::LastBaseline => {
