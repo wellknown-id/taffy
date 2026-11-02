@@ -2590,6 +2590,34 @@ fn perform_absolute_layout_on_absolute_children(
 
         let non_auto_margin = margin.map(|m| m.unwrap_or(0.0));
 
+        // Auto margins take the space between the insets (in the padding
+        // box), and are zero unless both insets are set.
+        // https://drafts.csswg.org/css-position-3/#abspos-margins
+        let margin_free_space = Size {
+            width: match (left, right) {
+                (Some(left), Some(right)) => {
+                    constants.container_size.width
+                        - constants.border.horizontal_axis_sum()
+                        - left
+                        - right
+                        - final_size.width
+                        - non_auto_margin.horizontal_axis_sum()
+                }
+                _ => 0.0,
+            },
+            height: match (top, bottom) {
+                (Some(top), Some(bottom)) => {
+                    constants.container_size.height
+                        - constants.border.vertical_axis_sum()
+                        - top
+                        - bottom
+                        - final_size.height
+                        - non_auto_margin.vertical_axis_sum()
+                }
+                _ => 0.0,
+            },
+        }
+        .f32_max(Size::ZERO);
         let free_space = Size {
             width: constants.container_size.width - final_size.width - non_auto_margin.horizontal_axis_sum(),
             height: constants.container_size.height - final_size.height - non_auto_margin.vertical_axis_sum(),
@@ -2602,7 +2630,7 @@ fn perform_absolute_layout_on_absolute_children(
                 width: {
                     let auto_margin_count = margin.left.is_none() as u8 + margin.right.is_none() as u8;
                     if auto_margin_count > 0 {
-                        free_space.width / auto_margin_count as f32
+                        margin_free_space.width / auto_margin_count as f32
                     } else {
                         0.0
                     }
@@ -2610,7 +2638,7 @@ fn perform_absolute_layout_on_absolute_children(
                 height: {
                     let auto_margin_count = margin.top.is_none() as u8 + margin.bottom.is_none() as u8;
                     if auto_margin_count > 0 {
-                        free_space.height / auto_margin_count as f32
+                        margin_free_space.height / auto_margin_count as f32
                     } else {
                         0.0
                     }
