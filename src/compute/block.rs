@@ -794,8 +794,14 @@ fn perform_final_layout_on_in_flow_children(
             if let Some(float_direction) = item.float.float_direction() {
                 has_active_floats = true;
 
+                // (A float's auto width is shrink-to-fit: no wider than the
+                // containing block, less its margins.)
                 let float_available_space = Size {
-                    width: item.intrinsic_width.unwrap_or(AvailableSpace::MaxContent),
+                    width: item.intrinsic_width.unwrap_or(AvailableSpace::Definite(
+                        (container_inner_width - item_non_auto_x_margin_sum)
+                            .maybe_min(item.max_size.width)
+                            .max(0.0),
+                    )),
                     height: item.intrinsic_height.unwrap_or(AvailableSpace::MaxContent),
                 };
                 let item_layout = tree.perform_child_layout(
