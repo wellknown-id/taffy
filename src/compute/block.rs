@@ -1238,7 +1238,8 @@ fn perform_absolute_layout_on_absolute_children(
         //   - Width is not already known
         //   - Item has both left and right inset properties set
         if let (None, Some(left), Some(right)) = (known_dimensions.width, left, right) {
-            let new_width_raw = area_width.maybe_sub(margin.left).maybe_sub(margin.right) - left - right;
+            // (The inset-modified containing block is at least zero wide.)
+            let new_width_raw = f32_max(area_width - left - right, 0.0).maybe_sub(margin.left).maybe_sub(margin.right);
             known_dimensions.width = Some(f32_max(new_width_raw, 0.0));
             known_dimensions = known_dimensions.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size);
         }
@@ -1247,7 +1248,7 @@ fn perform_absolute_layout_on_absolute_children(
         //   - Height is not already known
         //   - Item has both top and bottom inset properties set
         if let (None, Some(top), Some(bottom)) = (known_dimensions.height, top, bottom) {
-            let new_height_raw = area_height.maybe_sub(margin.top).maybe_sub(margin.bottom) - top - bottom;
+            let new_height_raw = f32_max(area_height - top - bottom, 0.0).maybe_sub(margin.top).maybe_sub(margin.bottom);
             known_dimensions.height = Some(f32_max(new_height_raw, 0.0));
             known_dimensions = known_dimensions.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size);
         }
@@ -1290,9 +1291,11 @@ fn perform_absolute_layout_on_absolute_children(
         let auto_margin = {
             // Auto margins for absolutely positioned elements in block containers only resolve
             // if inset is set. Otherwise they resolve to 0.
+            // (An inset-modified containing block can't be smaller than zero: the
+            // weaker inset gives way. https://drafts.csswg.org/css-position-3/#abspos-insets)
             let absolute_auto_margin_space = Point {
-                x: right.map(|right| area_size.width - right - left.unwrap_or(0.0)).unwrap_or(final_size.width),
-                y: bottom.map(|bottom| area_size.height - bottom - top.unwrap_or(0.0)).unwrap_or(final_size.height),
+                x: right.map(|right| (area_size.width - right - left.unwrap_or(0.0)).max(0.0)).unwrap_or(final_size.width),
+                y: bottom.map(|bottom| (area_size.height - bottom - top.unwrap_or(0.0)).max(0.0)).unwrap_or(final_size.height),
             };
             let free_space = Size {
                 width: absolute_auto_margin_space.x - final_size.width - non_auto_margin.horizontal_axis_sum(),
@@ -1319,9 +1322,12 @@ fn perform_absolute_layout_on_absolute_children(
                         0.0
                     }
                 },
+                // (Vertically, two auto margins are equal even when negative: an
+                // auto height that overflows the inset-modified containing block is
+                // centered in it. https://www.w3.org/TR/CSS21/visudet.html#abs-non-replaced-height)
                 height: {
                     let auto_margin_count = margin.top.is_none() as u8 + margin.bottom.is_none() as u8;
-                    if auto_margin_count == 2 && (style_size.height.is_none() || free_space.height < 0.0) {
+                    if auto_margin_count == 2 && style_size.height.is_none() && free_space.height >= 0.0 {
                         0.0
                     } else if auto_margin_count > 0 {
                         free_space.height / auto_margin_count as f32
